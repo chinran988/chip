@@ -108,6 +108,133 @@ def get_chip(
     }
 
 
+@router.get("/chip/{stock_id}/brokers")
+def get_brokers(
+    stock_id: str,
+    days: int = Query(default=60, ge=1, le=365),
+    top: int = Query(default=10, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """各券商分點買賣超彙總（top N 買超 / 賣超）。"""
+    # Use 2× calendar days to safely cover N trading days
+    since = date.today() - timedelta(days=days * 2)
+
+    sql = text("""
+        SELECT branch_id, branch_name,
+               SUM(buy_volume)  AS buy_vol,
+               SUM(sell_volume) AS sell_vol,
+               SUM(buy_value)   AS buy_val,
+               SUM(sell_value)  AS sell_val
+        FROM   raw_broker_chips
+        WHERE  stock_id = :sid AND date >= :since
+        GROUP  BY branch_id, branch_name
+        HAVING (buy_vol + sell_vol) > 0
+        ORDER  BY (buy_vol - sell_vol) DESC
+    """)
+    rows = db.execute(sql, {"sid": stock_id, "since": since}).fetchall()
+
+    def _fmt(r):
+        bv = r[2] or 0
+        sv = r[3] or 0
+        bval = r[4] or 0
+        sval = r[5] or 0
+        return {
+            "branch_id":     r[0],
+            "branch_name":   r[1],
+            "buy_volume":    bv,
+            "sell_volume":   sv,
+            "net_volume":    bv - sv,
+            "buy_value_wan": round(bval / 10, 0),
+            "sell_value_wan":round(sval / 10, 0),
+            "net_value_wan": round((bval - sval) / 10, 0),
+        }
+
+    all_b = [_fmt(r) for r in rows]
+    buyers  = [b for b in all_b if b["net_volume"] > 0][:top]
+    sellers = sorted([b for b in all_b if b["net_volume"] < 0],
+                     key=lambda x: x["net_volume"])[:top]
+    return {"stock_id": stock_id, "days": days, "top_buyers": buyers, "top_sellers": sellers}
+
+
+@router.get("/chip/{stock_id}/brokers/{branch_id}")
+def get_broker_detail(
+    stock_id: str,
+    branch_id: str,
+    days: int = Query(default=60, ge=1, le=365),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """指定券商分點每日明細（含累積庫存與損益）。"""
+    since = date.today() - timedelta(days=days * 2)
+
+    sql = text("""
+        SELECT date, branch_name,
+               buy_volume, sell_volume,
+               buy_value,  sell_value
+        FROM   raw_broker_chips
+        WHERE  stock_id = :sid AND branch_id = :bid AND date >= :since
+        ORDER  BY date ASC
+    """)
+    rows = db.execute(sql, {"sid": stock_id, "bid": branch_id, "since": since}).fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="此券商無分點資料")
+
+    branch_name = rows[0][1]
+    data = []
+    cum_inv = 0
+    cum_pnl = 0.0  # 累計損益（萬），sell - buy 角度
+
+    for r in rows:
+        bv   = r[2] or 0          # buy_volume 張
+        sv   = r[3] or 0          # sell_volume 張
+        bval = r[4] or 0          # buy_value 千元
+        sval = r[5] or 0          # sell_value 千元
+        net_vol = bv - sv
+        net_wan = round((bval - sval) / 10, 0)   # 買超為正（萬）
+        pnl_day = (sval - bval) / 10              # 當日損益（萬），賣超為正
+        cum_inv += net_vol
+        cum_pnl += pnl_day
+
+        buy_avg  = round(bval / bv, 2) if bv else 0
+        sell_avg = round(sval / sv, 2) if sv else 0
+
+        data.append({
+            "date":          r[0].isoformat() if hasattr(r[0], "isoformat") else str(r[0]),
+            "buy_volume":    bv,
+            "sell_volume":   sv,
+            "net_volume":    net_vol,
+            "net_value_wan": net_wan,
+            "buy_avg":       buy_avg,
+            "sell_avg":      sell_avg,
+            "cum_inventory": cum_inv,
+            "cum_pnl_wan":   round(cum_pnl, 0),
+        })
+
+    data.reverse()  # newest first
+
+    total_bv   = sum(r[2] or 0 for r in rows)
+    total_sv   = sum(r[3] or 0 for r in rows)
+    total_bval = sum(r[4] or 0 for r in rows)
+    total_sval = sum(r[5] or 0 for r in rows)
+
+    return {
+        "branch_id":   branch_id,
+        "branch_name": branch_name,
+        "stock_id":    stock_id,
+        "days":        days,
+        "data":        data,
+        "totals": {
+            "buy_volume":     total_bv,
+            "sell_volume":    total_sv,
+            "net_volume":     total_bv - total_sv,
+            "net_value_wan":  round((total_bval - total_sval) / 10, 0),
+            "buy_value_wan":  round(total_bval / 10, 0),
+            "sell_value_wan": round(total_sval / 10, 0),
+            "cum_pnl_wan":    round((total_sval - total_bval) / 10, 0),
+        },
+    }
+
+
 @router.get("/chip/{stock_id}/summary")
 def get_chip_summary(
     stock_id: str,
