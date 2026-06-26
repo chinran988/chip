@@ -1,0 +1,25 @@
+[project]
+name = "chip-platform"
+version = "0.1.0"
+description = "Project Alpha: Taiwan Chip Intelligence Platform"
+requires-python = ">=3.12, <3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.5",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "pandas>=2.2",
+    "numpy>=2.1",
+    "requests>=2.32",
+    "apscheduler>=3.10",
+    "python-dotenv>=1.0",
+    "openpyxl>=3.1",
+    "lxml>=6.1.1",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+]

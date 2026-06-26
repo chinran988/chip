@@ -1,0 +1,182 @@
+<svg viewBox="0 0 900 660" xmlns="http://www.w3.org/2000/svg" font-family="system-ui,sans-serif" font-size="12">
+  <title>CHIP 籌碼平台架構進度圖</title>
+  <desc>六階段架構圖，Phase 1 已完成，Phase 2-6 規劃中</desc>
+
+  <rect width="900" height="660" fill="#ffffff"/>
+
+  <text x="450" y="28" text-anchor="middle" font-size="15" font-weight="700" fill="#111">Project Alpha 籌碼平台 — 架構全景圖</text>
+
+  <rect x="640" y="8" width="14" height="14" rx="2" fill="#22c55e"/>
+  <text x="658" y="20" font-size="11" fill="#555">已完成</text>
+  <rect x="720" y="8" width="14" height="14" rx="2" fill="#3b82f6"/>
+  <text x="738" y="20" font-size="11" fill="#555">規劃中</text>
+  <rect x="800" y="8" width="14" height="14" rx="2" fill="#f59e0b"/>
+  <text x="818" y="20" font-size="11" fill="#555">整合</text>
+
+  <text x="28" y="55" font-size="11" font-weight="600" fill="#888">資料來源</text>
+
+  <rect x="28" y="62" width="140" height="54" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="98" y="81" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">TWSE 證交所</text>
+  <text x="98" y="96" text-anchor="middle" font-size="10" fill="#166534">T86 三大法人</text>
+  <text x="98" y="109" text-anchor="middle" font-size="10" fill="#166534">MI_MARGN 融資券 · TWT38U</text>
+
+  <rect x="188" y="62" width="130" height="54" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="253" y="81" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">TAIFEX 期交所</text>
+  <text x="253" y="96" text-anchor="middle" font-size="10" fill="#166534">TXF / MXF 期貨 OI</text>
+  <text x="253" y="109" text-anchor="middle" font-size="10" fill="#166534">選擇權 OI (規劃)</text>
+
+  <rect x="338" y="62" width="120" height="54" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="398" y="81" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">TDCC 集保</text>
+  <text x="398" y="96" text-anchor="middle" font-size="10" fill="#1e3a8a">千張大戶持股</text>
+  <text x="398" y="109" text-anchor="middle" font-size="10" fill="#1e3a8a">每週五 Phase 2</text>
+
+  <rect x="478" y="62" width="120" height="54" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="538" y="81" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">永豐 Sinopac</text>
+  <text x="538" y="96" text-anchor="middle" font-size="10" fill="#1e3a8a">股票清單補充</text>
+  <text x="538" y="109" text-anchor="middle" font-size="10" fill="#1e3a8a">fail-silent</text>
+
+  <line x1="98"  y1="116" x2="98"  y2="145" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrG)"/>
+  <line x1="253" y1="116" x2="253" y2="145" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrG)"/>
+  <line x1="398" y1="116" x2="398" y2="145" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrB)"/>
+  <line x1="538" y1="116" x2="538" y2="145" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrB)"/>
+
+  <text x="28" y="158" font-size="11" font-weight="600" fill="#15803d">✓ Phase 1 — 採集層 (已完成 2026-06-26)</text>
+
+  <rect x="28"  y="165" width="100" height="42" rx="5" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="78"  y="182" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">StockList</text>
+  <text x="78"  y="197" text-anchor="middle" font-size="9"  fill="#166534">1997 支 TWSE+OTC</text>
+
+  <rect x="138" y="165" width="100" height="42" rx="5" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="188" y="182" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">Calendar</text>
+  <text x="188" y="197" text-anchor="middle" font-size="9"  fill="#166534">261 交易日 2026</text>
+
+  <rect x="248" y="165" width="110" height="42" rx="5" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="303" y="182" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">Institutional</text>
+  <text x="303" y="197" text-anchor="middle" font-size="9"  fill="#166534">三大法人 1977 rows</text>
+
+  <rect x="368" y="165" width="100" height="42" rx="5" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="418" y="182" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">Margin</text>
+  <text x="418" y="197" text-anchor="middle" font-size="9"  fill="#166534">融資券 1279 rows</text>
+
+  <rect x="478" y="165" width="100" height="42" rx="5" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="528" y="182" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">FuturesOI</text>
+  <text x="528" y="197" text-anchor="middle" font-size="9"  fill="#166534">TXF+MXF 2 rows</text>
+
+  <rect x="588" y="165" width="100" height="42" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <text x="638" y="182" text-anchor="middle" font-size="10" font-weight="700" fill="#1e40af">BrokerChips</text>
+  <text x="638" y="197" text-anchor="middle" font-size="9"  fill="#1e3a8a">分點進出 Phase 2</text>
+
+  <line x1="350" y1="207" x2="350" y2="235" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrG)"/>
+
+  <rect x="700" y="165" width="170" height="42" rx="5" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="785" y="181" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">APScheduler</text>
+  <text x="785" y="194" text-anchor="middle" font-size="9"  fill="#166534">16:35 法人+券+OI</text>
+  <text x="785" y="207" text-anchor="middle" font-size="9"  fill="#166534">17:00 分點 · 09:00 股清</text>
+
+  <rect x="28" y="240" width="660" height="68" rx="8" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+  <text x="48" y="258" font-size="11" font-weight="700" fill="#15803d">✓ chip.db (SQLite · WAL · 64MB cache)</text>
+
+  <rect x="48"  y="264" width="88" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="92"  y="279" text-anchor="middle" font-size="9" fill="#14532d">raw_institutional</text>
+  <rect x="144" y="264" width="76" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="182" y="279" text-anchor="middle" font-size="9" fill="#14532d">raw_margin</text>
+  <rect x="228" y="264" width="82" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="269" y="279" text-anchor="middle" font-size="9" fill="#14532d">raw_futures_oi</text>
+  <rect x="318" y="264" width="80" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="358" y="279" text-anchor="middle" font-size="9" fill="#14532d">raw_broker_chips</text>
+  <rect x="406" y="264" width="58" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="435" y="279" text-anchor="middle" font-size="9" fill="#14532d">stocks</text>
+  <rect x="472" y="264" width="80" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="512" y="279" text-anchor="middle" font-size="9" fill="#14532d">trading_calendar</text>
+  <rect x="560" y="264" width="96" height="22" rx="3" fill="none" stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="608" y="279" text-anchor="middle" font-size="9" fill="#1e40af">processed_* (P2)</text>
+
+  <line x1="358" y1="308" x2="358" y2="334" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrG)"/>
+
+  <rect x="28" y="338" width="660" height="62" rx="8" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
+  <text x="48" y="356" font-size="11" font-weight="700" fill="#15803d">✓ FastAPI  port 8001  (lifespan · CORS · exit42 restart)</text>
+
+  <rect x="48"  y="362" width="88" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="92"  y="377" text-anchor="middle" font-size="9" fill="#14532d">GET /api/health ✓</text>
+  <rect x="144" y="362" width="104" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="196" y="377" text-anchor="middle" font-size="9" fill="#14532d">GET /api/v1/stocks ✓</text>
+  <rect x="256" y="362" width="118" height="22" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="315" y="377" text-anchor="middle" font-size="9" fill="#1e40af">GET /api/v1/chip/{id} P2</text>
+  <rect x="382" y="362" width="118" height="22" rx="3" fill="#dbeafe" stroke="#3b82f6" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="441" y="377" text-anchor="middle" font-size="9" fill="#1e40af">GET /api/v1/broker/{id} P2</text>
+  <rect x="508" y="362" width="96" height="22" rx="3" fill="#22c55e" opacity="0.2"/>
+  <text x="556" y="377" text-anchor="middle" font-size="9" fill="#14532d">POST /api/admin/* ✓</text>
+
+  <rect x="28" y="420" width="200" height="68" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="128" y="438" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">Phase 2 — 衍生指標層</text>
+  <text x="128" y="453" text-anchor="middle" font-size="10" fill="#1e3a8a">processed_chip 聚合表</text>
+  <text x="128" y="466" text-anchor="middle" font-size="10" fill="#1e3a8a">外資連買天數、多空比</text>
+  <text x="128" y="479" text-anchor="middle" font-size="10" fill="#1e3a8a">資券成數 + /chip/{id} API</text>
+
+  <rect x="244" y="420" width="170" height="68" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="329" y="438" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">Phase 3 — 報告</text>
+  <text x="329" y="453" text-anchor="middle" font-size="10" fill="#1e3a8a">每日 PDF / Excel 自動生成</text>
+  <text x="329" y="466" text-anchor="middle" font-size="10" fill="#1e3a8a">openpyxl + WeasyPrint</text>
+  <text x="329" y="479" text-anchor="middle" font-size="10" fill="#1e3a8a">17:30 排程寄出</text>
+
+  <rect x="430" y="420" width="260" height="68" rx="7" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="560" y="438" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">Phase 4 — 前端整合 A→B→C</text>
+  <text x="490" y="453" text-anchor="middle" font-size="10" fill="#78350f">A 獨立 port 8001</text>
+  <text x="490" y="466" text-anchor="middle" font-size="10" fill="#78350f">B PYCHARTs 新「籌碼」頁</text>
+  <text x="490" y="479" text-anchor="middle" font-size="10" fill="#78350f">C K 線下方嵌入副圖</text>
+  <line x1="580" y1="445" x2="610" y2="445" stroke="#92400e" stroke-width="1" marker-end="url(#arrA)"/>
+  <text x="622" y="449" font-size="10" fill="#78350f">B</text>
+  <line x1="634" y1="445" x2="660" y2="445" stroke="#92400e" stroke-width="1" marker-end="url(#arrA)"/>
+  <text x="672" y="449" font-size="10" fill="#78350f">C</text>
+
+  <rect x="28" y="505" width="195" height="52" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="125" y="522" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">Phase 5 — 處置王功能</text>
+  <text x="125" y="537" text-anchor="middle" font-size="10" fill="#1e3a8a">異常交易偵測 · 警示</text>
+  <text x="125" y="550" text-anchor="middle" font-size="10" fill="#1e3a8a">對標 StockWarden</text>
+
+  <rect x="240" y="505" width="195" height="52" rx="7" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="337" y="522" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">Phase 6 — 推播通知</text>
+  <text x="337" y="537" text-anchor="middle" font-size="10" fill="#1e3a8a">Line Messaging API</text>
+  <text x="337" y="550" text-anchor="middle" font-size="10" fill="#1e3a8a">或 Telegram Bot</text>
+
+  <rect x="710" y="240" width="170" height="320" rx="8" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="795" y="260" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">PYCHARTs 主平台</text>
+  <text x="795" y="274" text-anchor="middle" font-size="10" fill="#78350f">port 8000</text>
+
+  <rect x="724" y="282" width="142" height="24" rx="4" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1"/>
+  <text x="795" y="298" text-anchor="middle" font-size="9" fill="#15803d">K 線圖 ECharts ✓</text>
+  <rect x="724" y="312" width="142" height="24" rx="4" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1"/>
+  <text x="795" y="328" text-anchor="middle" font-size="9" fill="#15803d">Shioaji 報價 ✓</text>
+  <rect x="724" y="342" width="142" height="24" rx="4" fill="#22c55e" opacity="0.15" stroke="#22c55e" stroke-width="1"/>
+  <text x="795" y="358" text-anchor="middle" font-size="9" fill="#15803d">TouchAnce SDK ✓</text>
+
+  <rect x="724" y="382" width="142" height="38" rx="4" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="795" y="397" text-anchor="middle" font-size="9" font-weight="700" fill="#92400e">B 籌碼頁面 (Phase 4)</text>
+  <text x="795" y="411" text-anchor="middle" font-size="9" fill="#78350f">React Router 新路由</text>
+
+  <rect x="724" y="428" width="142" height="38" rx="4" fill="#fef3c7" stroke="#f59e0b" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="795" y="443" text-anchor="middle" font-size="9" font-weight="700" fill="#92400e">C 副圖嵌入 (Phase 4)</text>
+  <text x="795" y="457" text-anchor="middle" font-size="9" fill="#78350f">ECharts dual-grid</text>
+
+  <line x1="692" y1="358" x2="710" y2="390" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrA)"/>
+  <text x="680" y="376" text-anchor="middle" font-size="9" fill="#92400e">chip</text>
+  <text x="680" y="387" text-anchor="middle" font-size="9" fill="#92400e">API</text>
+
+  <rect x="28" y="574" width="660" height="34" rx="5" fill="#f8f9fa" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="48" y="587" font-size="10" fill="#666">工作目錄：</text>
+  <text x="116" y="587" font-size="10" font-weight="600" fill="#333">Project Quant/CHIP/</text>
+  <text x="280" y="587" font-size="10" fill="#666">　規劃書 &amp; 日誌存於此資料夾</text>
+  <text x="48" y="601" font-size="10" fill="#666">backend/  app/  data/chip.db  logs/  啟動.bat  (前端未建立)</text>
+
+  <defs>
+    <marker id="arrG" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#22c55e"/>
+    </marker>
+    <marker id="arrB" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrA" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+</svg>
