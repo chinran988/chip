@@ -64,7 +64,34 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response as StarletteResponse
+
+
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    """讓 HTTPS 頁面（如 tpex.org.tw）可以 fetch localhost（Chrome Private Network Access 策略）。"""
+
+    async def dispatch(self, request, call_next):
+        if request.method == "OPTIONS" and "access-control-request-private-network" in request.headers:
+            return StarletteResponse(
+                status_code=204,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "*",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Allow-Private-Network": "true",
+                },
+            )
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+
+
+app.add_middleware(PrivateNetworkAccessMiddleware)
 
 app.include_router(health_router)
 app.include_router(stocks_router)

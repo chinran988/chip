@@ -201,9 +201,10 @@ def backfill_status():
 
 @router.post("/collect/broker-chips")
 def trigger_broker_chips(
-    stock_ids: str = Query(description="Comma-separated stock IDs, e.g. 2330,2317"),
+    stock_ids: str = Query(description="逗號分隔股票代號，e.g. 2330,2317（上市用TWSE）"),
     target_date: str = Query(default=None),
 ):
+    """手動觸發上市(TWSE)券商分點採集。"""
     from app.scheduler.jobs import _today_cst
     from app.collectors.twse_broker_chips import BrokerChipsCollector
     d = date.fromisoformat(target_date) if target_date else _today_cst()
@@ -212,6 +213,76 @@ def trigger_broker_chips(
     try:
         col = BrokerChipsCollector(db)
         count = col.collect_stocks(d, ids)
-        return {"ok": True, "date": str(d), "stocks": ids, "rows": count}
+        return {"ok": True, "market": "twse", "date": str(d), "stocks": ids, "rows": count}
+    finally:
+        db.close()
+
+
+@router.post("/collect/broker-chips/bsr")
+def trigger_broker_chips_bsr(
+    stock_ids: str = Query(description="逗號分隔上市股票代號，e.g. 2330,2317（BSR 每筆間隔 30 秒，請勿一次太多）"),
+    target_date: str = Query(default=None),
+):
+    """手動觸發 BSR 買賣日報表採集（當日彙總，含成交均價）。30 秒/筆。"""
+    from app.scheduler.jobs import _today_cst
+    from app.collectors.bsr_broker_chips import BsrBrokerChipsCollector
+    d = date.fromisoformat(target_date) if target_date else _today_cst()
+    ids = [s.strip() for s in stock_ids.split(",") if s.strip()]
+    db = SessionLocal()
+    try:
+        col = BsrBrokerChipsCollector(db)
+        count = col.collect_stocks(d, ids)
+        return {"ok": True, "source": "bsr", "date": str(d), "stocks": ids, "rows": count}
+    finally:
+        db.close()
+
+
+@router.post("/collect/tpex-csv")
+def receive_tpex_csv(payload: dict):
+    """接收瀏覽器端 fetch 的 TPEx CSV，解析後寫入 raw_broker_chips。
+    Payload: {date: "YYYY-MM-DD", code: "XXXX", csv_text: "..."}
+    """
+    from app.collectors.bsr_broker_chips import BsrBrokerChipsCollector
+    from app.collectors.tpex_broker_chips import parse_csv_text
+    from app.models.raw import RawBrokerChips
+
+    code = str(payload.get("code", "")).strip()
+    csv_text = str(payload.get("csv_text", ""))
+    raw_date = str(payload.get("date", ""))
+    if not code or not csv_text or not raw_date:
+        return {"ok": False, "error": "missing code/csv_text/date"}
+    try:
+        d = date.fromisoformat(raw_date)
+        rows = parse_csv_text(csv_text, d, code)
+        if not rows:
+            return {"ok": True, "saved": 0, "brokers": 0}
+        db = SessionLocal()
+        try:
+            col = BsrBrokerChipsCollector(db)
+            col.upsert(RawBrokerChips, rows, ["date", "stock_id", "branch_id"])
+            db.commit()
+            return {"ok": True, "saved": len(rows), "brokers": len(rows)}
+        finally:
+            db.close()
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+@router.post("/collect/broker-chips/otc")
+def trigger_broker_chips_otc(
+    stock_ids: str = Query(default=None, description="逗號分隔上櫃股票代號（留空=全部上櫃）"),
+    target_date: str = Query(default=None),
+):
+    """手動觸發上櫃(TPEx)券商分點採集。"""
+    from app.scheduler.jobs import _today_cst
+    from app.collectors.tpex_broker_chips import TpexBrokerChipsCollector
+    d = date.fromisoformat(target_date) if target_date else _today_cst()
+    ids = [s.strip() for s in stock_ids.split(",") if s.strip()] if stock_ids else None
+    db = SessionLocal()
+    try:
+        col = TpexBrokerChipsCollector(db)
+        count = col.collect_stocks(d, ids)
+        return {"ok": True, "market": "otc", "date": str(d),
+                "stocks": ids or "all-otc", "rows": count}
     finally:
         db.close()

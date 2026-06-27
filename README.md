@@ -1,6 +1,6 @@
 # CHIP — 台灣籌碼情報平台
 
-**Project Alpha**  ·  v0.4  ·  2026-06-26
+**Project Alpha**  ·  v0.5  ·  2026-06-27
 
 三大法人、融資券、期貨未平倉的每日採集、衍生指標計算與視覺化分析平台。
 
@@ -88,6 +88,13 @@ Admin 端點需 Header：`X-Admin-Key: <key>`
 ---
 
 ## Changelog
+
+### v0.5 — 2026-06-27
+- TPEx 上櫃全股分點採集完成（909 支，191,634+ 筆，820 券商分點）
+- MCP Chrome 真實瀏覽器架構繞過 Cloudflare Turnstile（Playwright 廢棄）
+- 瀏覽器內記憶體佇列 + blob 下載架構（規避 Chrome PNA 封鎖）
+- `load_tpex_json.py` 批次 upsert 工具
+- `PrivateNetworkAccessMiddleware` 加入 backend（供未來 PNA 規格變更備用）
 
 ### v0.4 — 2026-06-26
 - Phase 3：ChipReporter Excel 日報（5 sheets，512KB），17:30 自動生成
