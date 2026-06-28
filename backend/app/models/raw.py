@@ -2,6 +2,126 @@ from sqlalchemy import Column, String, Integer, BigInteger, Date, Float, DateTim
 from sqlalchemy.sql import func
 from app.core.database import Base
 
+# ── 選擇權相關 models ─────────────────────────────────────────────────────────
+
+class RawOptionsChain(Base):
+    """選擇權每日行情（TAIFEX OpenAPI /DailyMarketReportOpt，所有商品）"""
+    __tablename__ = "raw_options_chain"
+    __table_args__ = (UniqueConstraint("date", "contract", "expiry", "strike", "call_put", name="uq_opt_chain"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    contract = Column(String(20), nullable=False, index=True)
+    expiry = Column(String(20), nullable=False)
+    strike = Column(Integer, nullable=False)
+    call_put = Column(String(4), nullable=False)
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
+    volume = Column(BigInteger, default=0)
+    settlement_price = Column(Float)
+    open_interest = Column(BigInteger, default=0)
+    best_bid = Column(Float)
+    best_ask = Column(Float)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class RawOptionsInstitutional(Base):
+    """三大法人選擇權 Call/Put 分計（TAIFEX OpenAPI）"""
+    __tablename__ = "raw_options_institutional"
+    __table_args__ = (UniqueConstraint("date", "contract_code", "call_put", "institution", name="uq_opt_inst"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    contract_code = Column(String(50), nullable=False)
+    call_put = Column(String(6), nullable=False)
+    institution = Column(String(10), nullable=False)
+    buy_vol = Column(BigInteger, default=0)
+    buy_val = Column(BigInteger, default=0)
+    sell_vol = Column(BigInteger, default=0)
+    sell_val = Column(BigInteger, default=0)
+    net_vol = Column(BigInteger, default=0)
+    net_val = Column(BigInteger, default=0)
+    oi_long = Column(BigInteger, default=0)
+    oi_long_val = Column(BigInteger, default=0)
+    oi_short = Column(BigInteger, default=0)
+    oi_short_val = Column(BigInteger, default=0)
+    oi_net = Column(BigInteger, default=0)
+    oi_net_val = Column(BigInteger, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class RawOptionsInstFO(Base):
+    """三大法人期貨/選擇權合計（TAIFEX OpenAPI）"""
+    __tablename__ = "raw_options_inst_fo"
+    __table_args__ = (UniqueConstraint("date", "institution", name="uq_opt_inst_fo"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    institution = Column(String(10), nullable=False)
+    fut_buy_vol = Column(BigInteger, default=0)
+    opt_buy_vol = Column(BigInteger, default=0)
+    fut_buy_val = Column(BigInteger, default=0)
+    opt_buy_val = Column(BigInteger, default=0)
+    fut_sell_vol = Column(BigInteger, default=0)
+    opt_sell_vol = Column(BigInteger, default=0)
+    fut_sell_val = Column(BigInteger, default=0)
+    opt_sell_val = Column(BigInteger, default=0)
+    fut_net_vol = Column(BigInteger, default=0)
+    opt_net_vol = Column(BigInteger, default=0)
+    fut_net_val = Column(BigInteger, default=0)
+    opt_net_val = Column(BigInteger, default=0)
+    fut_oi_long = Column(BigInteger, default=0)
+    opt_oi_long = Column(BigInteger, default=0)
+    fut_oi_long_val = Column(BigInteger, default=0)
+    opt_oi_long_val = Column(BigInteger, default=0)
+    fut_oi_short = Column(BigInteger, default=0)
+    opt_oi_short = Column(BigInteger, default=0)
+    fut_oi_short_val = Column(BigInteger, default=0)
+    opt_oi_short_val = Column(BigInteger, default=0)
+    fut_oi_net = Column(BigInteger, default=0)
+    opt_oi_net = Column(BigInteger, default=0)
+    fut_oi_net_val = Column(BigInteger, default=0)
+    opt_oi_net_val = Column(BigInteger, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class RawOptionsLargeTraders(Base):
+    """大額交易人選擇權未平倉（TAIFEX OpenAPI /OpenInterestOfLargeTradersOptions）"""
+    __tablename__ = "raw_options_large_traders"
+    __table_args__ = (UniqueConstraint("date", "contract", "call_put", "settlement_month", "trader_type", name="uq_opt_lt"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    contract = Column(String(20), nullable=False, index=True)
+    contract_name = Column(String(50))
+    call_put = Column(String(10), nullable=False)
+    settlement_month = Column(String(10), nullable=False)
+    trader_type = Column(String(5), nullable=False)
+    top5_buy = Column(BigInteger, default=0)
+    top5_sell = Column(BigInteger, default=0)
+    top10_buy = Column(BigInteger, default=0)
+    top10_sell = Column(BigInteger, default=0)
+    market_oi = Column(BigInteger, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class RawPutCallRatio(Base):
+    """臺指選擇權 Put/Call 比（TAIFEX OpenAPI /PutCallRatio，22 交易日）"""
+    __tablename__ = "raw_put_call_ratio"
+    __table_args__ = (UniqueConstraint("date", name="uq_pcr_date"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    put_volume = Column(BigInteger, default=0)
+    call_volume = Column(BigInteger, default=0)
+    pc_volume_ratio = Column(Float)
+    put_oi = Column(BigInteger, default=0)
+    call_oi = Column(BigInteger, default=0)
+    pc_oi_ratio = Column(Float)
+    created_at = Column(DateTime, server_default=func.now())
+
 
 class RawInstitutional(Base):
     """三大法人買賣超（TWSE T86）"""

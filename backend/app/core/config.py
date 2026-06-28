@@ -11,6 +11,7 @@ class Settings(BaseSettings):
 
     TWSE_BASE_URL: str = "https://www.twse.com.tw"
     TWSE_OPENAPI_URL: str = "https://openapi.twse.com.tw"
+    TPEX_BASE_URL: str = "https://www.tpex.org.tw"
     TAIFEX_BASE_URL: str = "https://www.taifex.com.tw"
     TDCC_BASE_URL: str = "https://www.tdcc.com.tw"
     SINOPAC_ADAPTER_URL: str = "http://127.0.0.1:8011"

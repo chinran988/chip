@@ -16,6 +16,9 @@ dependencies = [
     "python-dotenv>=1.0",
     "openpyxl>=3.1",
     "lxml>=6.1.1",
+    "browser-cookie3>=0.20.1",
+    "ddddocr>=1.6.1",
+    "playwright>=1.60.0",
 ]
 
 [tool.uv]

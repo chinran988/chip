@@ -76,7 +76,7 @@ def job_daily_collect() -> None:
 
 
 def job_broker_chips() -> None:
-    """Broker chips — heavy per-stock query, runs slightly later."""
+    """Broker chips — 上市(TWSE) + 上櫃(TPEx)，各取機構動能前 200 支。"""
     today = _today_cst()
     if not _is_trading_day(today):
         return
@@ -84,12 +84,12 @@ def job_broker_chips() -> None:
     db = SessionLocal()
     try:
         from app.collectors.twse_broker_chips import BrokerChipsCollector
-        # Collect top active stocks only (limit to avoid flooding TWSE)
-        # Full sweep runs over multiple days via a separate weekend job
+        from app.collectors.tpex_broker_chips import TpexBrokerChipsCollector
         from app.models.raw import RawInstitutional
         from sqlalchemy import func, desc
-        # Pick stocks with high institutional net activity today
-        top_stocks = (
+
+        # 上市：法人動能前 200
+        twse_top = (
             db.query(RawInstitutional.stock_id)
             .filter(RawInstitutional.date == today)
             .order_by(desc(func.abs(
@@ -99,10 +99,25 @@ def job_broker_chips() -> None:
             .limit(200)
             .all()
         )
-        stock_ids = [r.stock_id for r in top_stocks]
-        col = BrokerChipsCollector(db)
-        count = col.collect_stocks(today, stock_ids)
-        logger.info("[job_broker_chips] %d rows for %d stocks", count, len(stock_ids))
+        twse_ids = [r.stock_id for r in twse_top]
+        twse_count = BrokerChipsCollector(db).collect_stocks(today, twse_ids)
+
+        # 上櫃：同樣策略，限 100 支（TPEx 較慢）
+        otc_top = (
+            db.query(RawInstitutional.stock_id)
+            .filter(RawInstitutional.date == today)
+            .order_by(desc(func.abs(
+                RawInstitutional.foreign_buy - RawInstitutional.foreign_sell
+                + RawInstitutional.trust_buy - RawInstitutional.trust_sell
+            )))
+            .limit(100)
+            .all()
+        )
+        otc_ids = [r.stock_id for r in otc_top]
+        otc_count = TpexBrokerChipsCollector(db).collect_stocks(today, otc_ids)
+
+        logger.info("[job_broker_chips] twse=%d rows/%d stocks  otc=%d rows/%d stocks",
+                    twse_count, len(twse_ids), otc_count, len(otc_ids))
     finally:
         db.close()
 
@@ -139,6 +154,22 @@ def job_generate_report() -> None:
         db.close()
 
 
+def job_collect_options() -> None:
+    """選擇權每日採集 — TAIFEX OpenAPI（chain / institutional / large_traders / P/C比）。"""
+    today = _today_cst()
+    if not _is_trading_day(today):
+        return
+    db = SessionLocal()
+    try:
+        from app.collectors.taifex_options import TaifexOptionsCollector
+        results = TaifexOptionsCollector(db).collect(today)
+        logger.info("[job_collect_options] %s results: %s", today, results)
+    except Exception as e:
+        logger.error("[job_collect_options] error: %s", e, exc_info=True)
+    finally:
+        db.close()
+
+
 def job_fill_calendar() -> None:
     """Ensure trading calendar covers current + next year."""
     db = SessionLocal()
@@ -169,6 +200,10 @@ def create_scheduler() -> BackgroundScheduler:
     # Broker chips — 17:00 CST (after main collection)
     scheduler.add_job(job_broker_chips, CronTrigger(hour=17, minute=0, timezone="Asia/Taipei"),
                       id="broker_chips", replace_existing=True)
+
+    # Options collect — 17:05 CST (TAIFEX OpenAPI 盤後約 17:00 更新)
+    scheduler.add_job(job_collect_options, CronTrigger(hour=17, minute=5, timezone="Asia/Taipei"),
+                      id="collect_options", replace_existing=True)
 
     # Chip processor — 17:15 CST (after broker chips, build processed_chip)
     scheduler.add_job(job_process_chip, CronTrigger(hour=17, minute=15, timezone="Asia/Taipei"),

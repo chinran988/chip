@@ -23,6 +23,7 @@ from app.api.v1.admin import router as admin_router
 from app.api.v1.chip import router as chip_router
 from app.api.v1.futures import router as futures_router
 from app.api.v1.reports import router as reports_router
+from app.api.v1.options import router as options_router
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -98,6 +99,7 @@ app.include_router(stocks_router)
 app.include_router(chip_router)
 app.include_router(futures_router)
 app.include_router(reports_router)
+app.include_router(options_router)
 app.include_router(admin_router)
 
 

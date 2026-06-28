@@ -268,6 +268,18 @@ def receive_tpex_csv(payload: dict):
         return {"ok": False, "error": str(e)[:200]}
 
 
+@router.post("/collect/options")
+def trigger_collect_options():
+    """手動觸發選擇權採集（TAIFEX OpenAPI 全商品 chain / 法人 / 大額 / P/C比）。"""
+    from app.collectors.taifex_options import TaifexOptionsCollector
+    db = SessionLocal()
+    try:
+        results = TaifexOptionsCollector(db).collect()
+        return {"ok": True, "results": results}
+    finally:
+        db.close()
+
+
 @router.post("/collect/broker-chips/otc")
 def trigger_broker_chips_otc(
     stock_ids: str = Query(default=None, description="逗號分隔上櫃股票代號（留空=全部上櫃）"),
