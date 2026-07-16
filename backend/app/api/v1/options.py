@@ -40,7 +40,9 @@ def get_expiries(
     contract: str = Query(default="TXO"),
     db: Session = Depends(get_db),
 ):
-    """返回指定合約的可用到期月份（週選 + 月選）。"""
+    """返回指定合約、指定日期的可用到期月份（週選 + 月選）。
+    date 未指定時取 DB 最新日期。
+    """
     d = date_str or _latest_options_date(db)
     if not d:
         return {"date": None, "contract": contract, "expiries": []}
@@ -66,37 +68,62 @@ def get_chain(
     date_str: Optional[str] = Query(default=None, alias="date"),
     contract: str = Query(default="TXO"),
     expiry: Optional[str] = Query(default=None),
+    session: str = Query(default="日盤"),  # 日盤|夜盤|全日
     db: Session = Depends(get_db),
 ):
-    """返回選擇權鏈 Call/Put 雙邊行情，用於 T字報價表。"""
+    """返回選擇權鏈 Call/Put 雙邊行情，用於 T字報價表。
+    session: 日盤=一般盤, 夜盤=盤後, 全日=兩盤加總（量加總，OI取一般，收盤取盤後優先）
+    """
     d = date_str or _latest_options_date(db)
     if not d:
-        return {"date": None, "contract": contract, "expiry": expiry, "rows": []}
+        return {"date": None, "contract": contract, "expiry": expiry, "session": session, "rows": []}
 
-    filters = "WHERE date = :d AND contract = :c"
+    base_where = "date = :d AND contract = :c"
     params: dict = {"d": d, "c": contract}
     if expiry:
-        filters += " AND expiry = :e"
+        base_where += " AND expiry = :e"
         params["e"] = expiry
 
-    rows = db.execute(
-        text(f"""
+    if session == "全日":
+        sql = f"""
+            SELECT expiry, strike, call_put,
+                   COALESCE(MAX(CASE WHEN trading_session='一般' THEN open END), MAX(open)) AS open,
+                   COALESCE(MAX(CASE WHEN trading_session='一般' THEN high END), MAX(high)) AS high,
+                   COALESCE(MAX(CASE WHEN trading_session='一般' THEN low END), MAX(low)) AS low,
+                   COALESCE(MAX(CASE WHEN trading_session='盤後' THEN close END),
+                            MAX(CASE WHEN trading_session='一般' THEN close END)) AS close,
+                   SUM(volume) AS volume,
+                   COALESCE(MAX(CASE WHEN trading_session='一般' THEN settlement_price END)) AS settlement_price,
+                   COALESCE(MAX(CASE WHEN trading_session='一般' THEN open_interest END), 0) AS open_interest,
+                   COALESCE(MAX(CASE WHEN trading_session='盤後' THEN best_bid END),
+                            MAX(CASE WHEN trading_session='一般' THEN best_bid END)) AS best_bid,
+                   COALESCE(MAX(CASE WHEN trading_session='盤後' THEN best_ask END),
+                            MAX(CASE WHEN trading_session='一般' THEN best_ask END)) AS best_ask
+            FROM raw_options_chain
+            WHERE {base_where}
+            GROUP BY expiry, strike, call_put
+            ORDER BY expiry, strike, call_put
+        """
+    else:
+        session_val = "一般" if session == "日盤" else "盤後"
+        params["s"] = session_val
+        sql = f"""
             SELECT expiry, strike, call_put,
                    open, high, low, close, volume,
                    settlement_price, open_interest, best_bid, best_ask
             FROM raw_options_chain
-            {filters}
+            WHERE {base_where} AND trading_session = :s
             ORDER BY expiry, strike, call_put
-        """),
-        params,
-    ).fetchall()
+        """
 
+    rows = db.execute(text(sql), params).fetchall()
     cols = ["expiry", "strike", "call_put", "open", "high", "low", "close",
             "volume", "settlement_price", "open_interest", "best_bid", "best_ask"]
     return {
         "date": d,
         "contract": contract,
         "expiry": expiry,
+        "session": session,
         "rows": [dict(zip(cols, r)) for r in rows],
     }
 
@@ -108,28 +135,48 @@ def get_support_resistance(
     date_str: Optional[str] = Query(default=None, alias="date"),
     contract: str = Query(default="TXO"),
     expiry: Optional[str] = Query(default=None),
+    session: str = Query(default="日盤"),  # 日盤|夜盤|全日
     db: Session = Depends(get_db),
 ):
-    """各履約價 Call OI / Put OI 匯總，用於支撐壓力橫條圖。"""
+    """各履約價 Call OI / Put OI 匯總，用於支撐壓力橫條圖。
+    date: 指定日期（YYYY-MM-DD），預設最新。
+    session: 日盤=一般盤 OI, 夜盤=盤後 OI（05:05快照後有效），全日=OI取一般+量加總
+    """
     d = date_str or _latest_options_date(db)
     if not d:
         return {"date": None, "contract": contract, "data": []}
 
-    filters = "WHERE date = :d AND contract = :c"
+    base_where = "date = :d AND contract = :c"
     params: dict = {"d": d, "c": contract}
     if expiry:
-        filters += " AND expiry = :e"
+        base_where += " AND expiry = :e"
         params["e"] = expiry
+
+    if session == "全日":
+        # OI 來自一般盤；成交量加總兩盤
+        oi_case_c  = "SUM(CASE WHEN call_put='買權' AND trading_session='一般' THEN open_interest ELSE 0 END)"
+        oi_case_p  = "SUM(CASE WHEN call_put='賣權' AND trading_session='一般' THEN open_interest ELSE 0 END)"
+        vol_case_c = "SUM(CASE WHEN call_put='買權' THEN volume ELSE 0 END)"
+        vol_case_p = "SUM(CASE WHEN call_put='賣權' THEN volume ELSE 0 END)"
+        where = f"WHERE {base_where}"
+    else:
+        session_val = "一般" if session == "日盤" else "盤後"
+        params["s"] = session_val
+        oi_case_c  = "SUM(CASE WHEN call_put='買權' THEN open_interest ELSE 0 END)"
+        oi_case_p  = "SUM(CASE WHEN call_put='賣權' THEN open_interest ELSE 0 END)"
+        vol_case_c = "SUM(CASE WHEN call_put='買權' THEN volume ELSE 0 END)"
+        vol_case_p = "SUM(CASE WHEN call_put='賣權' THEN volume ELSE 0 END)"
+        where = f"WHERE {base_where} AND trading_session = :s"
 
     rows = db.execute(
         text(f"""
             SELECT strike,
-                   SUM(CASE WHEN call_put='C' THEN open_interest ELSE 0 END) AS call_oi,
-                   SUM(CASE WHEN call_put='P' THEN open_interest ELSE 0 END) AS put_oi,
-                   SUM(CASE WHEN call_put='C' THEN volume ELSE 0 END) AS call_vol,
-                   SUM(CASE WHEN call_put='P' THEN volume ELSE 0 END) AS put_vol
+                   {oi_case_c}  AS call_oi,
+                   {oi_case_p}  AS put_oi,
+                   {vol_case_c} AS call_vol,
+                   {vol_case_p} AS put_vol
             FROM raw_options_chain
-            {filters}
+            {where}
             GROUP BY strike
             ORDER BY strike
         """),
@@ -141,7 +188,7 @@ def get_support_resistance(
          "call_vol": r[3], "put_vol": r[4]}
         for r in rows
     ]
-    return {"date": d, "contract": contract, "expiry": expiry, "data": data}
+    return {"date": d, "contract": contract, "expiry": expiry, "session": session, "data": data}
 
 
 # ── 三大法人選擇權籌碼 ────────────────────────────────────────────────────────

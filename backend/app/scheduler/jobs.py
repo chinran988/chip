@@ -184,6 +184,116 @@ def job_fill_calendar() -> None:
         db.close()
 
 
+def job_collect_night_session() -> None:
+    """05:35 AM：夜盤資料完整採集（兩步驟）。
+    步驟1：呼叫 TAIFEX 採集器取最新資料（此時 05:30 後 API 已含盤後量/收盤）。
+    步驟2：以 TC/SINO 即時快照補入 OI（TAIFEX 盤後 OI 永遠 0，需即時逆推）。
+    夜盤 15:00~05:00，05:00 收盤後 OI 仍可從即時來源讀取。
+    """
+    import json as _json
+    import urllib.request as _req
+    from sqlalchemy import text as _t
+    from app.core.config import settings as _s
+
+    PYCHARTS = getattr(_s, "pycharts_url", "http://localhost:8000")
+
+    # ── 步驟1：TAIFEX 採集器建立盤後列（量/收盤/開高低，OI=0）──────────────
+    db = SessionLocal()
+    try:
+        from sqlalchemy import text
+        from app.collectors.taifex_options import TaifexOptionsCollector
+
+        # 取最後一個有一般盤資料的交易日（05:35 時可能是隔天，例如週六）
+        row = db.execute(text("SELECT MAX(date) FROM raw_options_chain WHERE trading_session='一般'")).fetchone()
+        if not row or not row[0]:
+            logger.warning("[job_collect_night_session] 無一般盤資料，略過")
+            return
+        last_trading_date = row[0]  # date 物件
+
+        # TAIFEX API 不接受日期參數，直接回傳最新資料（此時含 last_trading_date 的盤後）
+        results = TaifexOptionsCollector(db).collect(last_trading_date)
+        logger.info("[job_collect_night_session] 步驟1 TAIFEX 採集 %s: %s", last_trading_date, results)
+    except Exception as exc:
+        logger.error("[job_collect_night_session] 步驟1 失敗: %s", exc, exc_info=True)
+        db.rollback()
+        db.close()
+        return
+    finally:
+        db.close()
+
+    # ── 步驟2：TC/SINO 即時 OI 補入盤後列（覆蓋 OI=0）───────────────────────
+    db = SessionLocal()
+    try:
+        from sqlalchemy import text as _t2
+
+        row = db.execute(_t2("SELECT MAX(date) FROM raw_options_chain WHERE trading_session='一般'")).fetchone()
+        if not row or not row[0]:
+            return
+        trading_date = str(row[0])
+
+        expiry_rows = db.execute(_t2("""
+            SELECT DISTINCT expiry FROM raw_options_chain
+            WHERE date=:d AND trading_session='盤後' AND contract='TXO'
+            ORDER BY expiry
+        """), {"d": trading_date}).fetchall()
+        months = list(dict.fromkeys(r[0][:6] for r in expiry_rows))[:3]
+
+        if not months:
+            logger.warning("[job_collect_night_session] 步驟2 無盤後月份，TAIFEX 可能尚未發布")
+            return
+
+        total_rows = 0
+        for month in months:
+            live_data: dict | None = None
+            used_source = "?"
+            for src in ("tc", "sino"):
+                url = f"{PYCHARTS}/api/options/live?source={src}&symbol=TXO&month={month}"
+                try:
+                    with _req.urlopen(url, timeout=30) as resp:
+                        d = _json.loads(resp.read().decode("utf-8"))
+                    if d.get("rows"):
+                        live_data = d
+                        used_source = src
+                        break
+                except Exception as exc:
+                    logger.warning("[job_collect_night_session] 步驟2 source=%s month=%s 失敗: %s", src, month, exc)
+
+            if not live_data:
+                logger.warning("[job_collect_night_session] 步驟2 %s 月份 %s 兩來源無資料", trading_date, month)
+                continue
+
+            upserted = 0
+            for item in live_data.get("rows", []):
+                try:
+                    strike   = int(round(float(item.get("strike", 0))))
+                    call_put = str(item.get("call_put", ""))
+                    oi       = int(item.get("open_interest") or 0)
+                    dm       = str(item.get("delivery_month", month))[:6]
+                    db.execute(_t2("""
+                        UPDATE raw_options_chain
+                        SET open_interest=:oi
+                        WHERE date=:date AND contract='TXO'
+                          AND trading_session='盤後'
+                          AND strike=:strike AND call_put=:cp
+                          AND SUBSTR(expiry,1,6)=:dm
+                    """), {"date": trading_date, "strike": strike, "cp": call_put, "oi": oi, "dm": dm})
+                    upserted += 1
+                except Exception as exc:
+                    logger.error("[job_collect_night_session] 步驟2 列更新失敗: %s", exc)
+
+            db.commit()
+            total_rows += upserted
+            logger.info("[job_collect_night_session] 步驟2 %s %s 由 %s 補入 OI %d 列",
+                        trading_date, month, used_source, upserted)
+
+        logger.info("[job_collect_night_session] 完成，共補入 OI %d 列，交易日 %s", total_rows, trading_date)
+    except Exception as exc:
+        logger.error("[job_collect_night_session] 步驟2 失敗: %s", exc, exc_info=True)
+        db.rollback()
+    finally:
+        db.close()
+
+
 # ── Scheduler factory ─────────────────────────────────────────────────────
 
 def create_scheduler() -> BackgroundScheduler:
@@ -192,6 +302,10 @@ def create_scheduler() -> BackgroundScheduler:
     # Stock list refresh — every day 09:00 CST
     scheduler.add_job(job_collect_stocks, CronTrigger(hour=9, minute=0, timezone="Asia/Taipei"),
                       id="collect_stocks", replace_existing=True)
+
+    # 夜盤採集 — 05:35 CST（盤後 05:00 收盤，TAIFEX 05:30 發布盤後量/收盤，05:35 兩步驟：採集+補OI）
+    scheduler.add_job(job_collect_night_session, CronTrigger(hour=5, minute=35, timezone="Asia/Taipei"),
+                      id="collect_night_session", replace_existing=True)
 
     # Main daily collection — 16:35 CST (after TWSE closes + publishes)
     scheduler.add_job(job_daily_collect, CronTrigger(hour=16, minute=35, timezone="Asia/Taipei"),

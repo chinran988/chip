@@ -9,7 +9,7 @@
   6. 30±5 秒後下一支
 
 資料粒度：每券商每成交價一列 → 彙總後含加權均買/均賣價。
-注意：BSR 只有當日資料，無歷史。
+注意：BSR 保留前一交易日資料（隔日仍可補採），但更早的歷史無法查。
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ from app.models.raw import RawBrokerChips
 from app.models.reference import Stock
 
 _BSR = "https://bsr.twse.com.tw/bshtm"
-_DELAY_BASE  = 30.0
+_DELAY_BASE  = 15.0
 _DELAY_JITTER = 5.0
 _MAX_CAPTCHA_RETRY = 8
 

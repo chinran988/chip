@@ -123,6 +123,14 @@ def trigger_daily_collect(target_date: str = Query(default=None, description="YY
                 results[col.name] = col.collect(d)
             except Exception as e:
                 results[col.name] = f"error: {e}"
+        # 上櫃籌碼（TPEx 三大法人 + 融資融券，公開 OpenAPI 純後端）
+        try:
+            from app.collectors.tpex_chip import TpexChipCollector
+            tp = TpexChipCollector(db).collect_all(d)
+            results["tpex_institutional"] = tp["tpex_institutional"]
+            results["tpex_margin"] = tp["tpex_margin"]
+        except Exception as e:
+            results["tpex_chip"] = f"error: {e}"
     finally:
         db.close()
     return {"ok": True, "date": str(d), "results": results}
@@ -278,6 +286,16 @@ def trigger_collect_options():
         return {"ok": True, "results": results}
     finally:
         db.close()
+
+
+@router.post("/collect/options-night")
+def trigger_collect_options_night():
+    """手動觸發夜盤選擇權採集（TAIFEX盤後量/收盤 + TC/SINO補OI），等同 05:35 排程。"""
+    from app.scheduler.jobs import job_collect_night_session
+    import threading
+    t = threading.Thread(target=job_collect_night_session, daemon=True)
+    t.start()
+    return {"ok": True, "message": "夜盤採集已背景啟動（步驟1:TAIFEX → 步驟2:TC/SINO補OI）"}
 
 
 @router.post("/collect/broker-chips/otc")

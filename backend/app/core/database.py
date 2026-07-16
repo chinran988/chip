@@ -26,7 +26,47 @@ class Base(DeclarativeBase):
     pass
 
 
+def _migrate() -> None:
+    """SQLite schema migrations — idempotent, safe to call on every startup."""
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        cols = {
+            row[1]
+            for row in conn.execute(text("PRAGMA table_info(raw_options_chain)")).fetchall()
+        }
+        if "trading_session" not in cols:
+            bak = conn.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='_chain_bak'"
+            )).fetchone()
+            if bak:
+                conn.execute(text("DROP TABLE _chain_bak"))
+            conn.execute(text("ALTER TABLE raw_options_chain RENAME TO _chain_bak"))
+            conn.commit()
+
+    from app.models import reference, raw  # noqa: F401 — registers all models
+    Base.metadata.create_all(bind=engine)
+
+    with engine.connect() as conn:
+        bak = conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='_chain_bak'"
+        )).fetchone()
+        if bak:
+            conn.execute(text("""
+                INSERT OR IGNORE INTO raw_options_chain
+                    (date, contract, expiry, strike, call_put, trading_session,
+                     open, high, low, close, volume, settlement_price,
+                     open_interest, best_bid, best_ask, created_at)
+                SELECT date, contract, expiry, strike, call_put, '一般',
+                       open, high, low, close, volume, settlement_price,
+                       open_interest, best_bid, best_ask, created_at
+                FROM _chain_bak
+            """))
+            conn.execute(text("DROP TABLE _chain_bak"))
+            conn.commit()
+
+
 def init_db() -> None:
+    _migrate()
     from app.models import reference, raw  # noqa: F401 — registers all models
     Base.metadata.create_all(bind=engine)
 

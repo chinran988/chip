@@ -111,12 +111,14 @@ class TaifexOptionsCollector(BaseCollector):
                 strike = int(str(r.get("StrikePrice", "0")).replace(",", "").strip())
             except Exception:
                 strike = 0
+            session_raw = str(r.get("TradingSession", "")).strip()
             rows.append({
                 "date":             d,
                 "contract":         str(r.get("Contract", "")).strip(),
                 "expiry":           str(r.get("ContractMonth(Week)", "")).strip(),
                 "strike":           strike,
                 "call_put":         str(r.get("CallPut", "")).strip(),
+                "trading_session":  "盤後" if session_raw == "盤後" else "一般",
                 "open":             _sf(r.get("Open")),
                 "high":             _sf(r.get("High")),
                 "low":              _sf(r.get("Low")),
@@ -130,7 +132,7 @@ class TaifexOptionsCollector(BaseCollector):
         if not rows:
             return 0
         count = self.upsert(RawOptionsChain, rows,
-                            ["date", "contract", "expiry", "strike", "call_put"])
+                            ["date", "contract", "expiry", "strike", "call_put", "trading_session"])
         self.db.commit()
         self.log.info("[taifex_options] chain: %d rows", count)
         return count
