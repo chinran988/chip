@@ -131,6 +131,22 @@ def trigger_daily_collect(target_date: str = Query(default=None, description="YY
             results["tpex_margin"] = tp["tpex_margin"]
         except Exception as e:
             results["tpex_chip"] = f"error: {e}"
+        # 整體融資維持率（市場彙總，Σ個股融資張數×收盤 ÷ 融資金額）
+        try:
+            import sqlite3
+            from app.collectors import market_margin as mm
+            from app.core.config import settings
+            conn = sqlite3.connect(str(settings.db_path))
+            mm.ensure_table(conn)
+            rec = mm.compute_day(d)
+            if rec:
+                mm.store_day(conn, rec)
+                results["market_maintenance_ratio"] = rec["maintenance_ratio"]
+            else:
+                results["market_maintenance_ratio"] = "無資料(非交易日?)"
+            conn.close()
+        except Exception as e:
+            results["market_margin"] = f"error: {e}"
     finally:
         db.close()
     return {"ok": True, "date": str(d), "results": results}
