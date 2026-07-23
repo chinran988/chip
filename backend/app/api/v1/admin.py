@@ -27,6 +27,21 @@ _backfill_lock = threading.Lock()
 
 # ── Single-day collect helpers ────────────────────────────────────────────────
 
+def _is_trading_day(d: date) -> bool:
+    """查 trading_calendar 表判斷是否交易日；無記錄則 fallback 週末判斷。
+    根治非交易日幽靈資料：API 對週末/假日查詢會回最近交易日資料並標成查詢日，
+    不可信 API 自報日期，改用真實交易日曆。"""
+    from app.models.reference import TradingCalendar
+    db = SessionLocal()
+    try:
+        row = db.query(TradingCalendar).filter(TradingCalendar.date == d).first()
+        if row is not None:
+            return bool(row.is_trading_day)
+        return d.weekday() < 5   # fallback：週末非交易日
+    finally:
+        db.close()
+
+
 def _collect_one_day(d: date) -> dict[str, int]:
     from app.collectors.twse_institutional import InstitutionalCollector
     from app.collectors.twse_margin import MarginCollector
@@ -147,6 +162,18 @@ def trigger_daily_collect(target_date: str = Query(default=None, description="YY
             conn.close()
         except Exception as e:
             results["market_margin"] = f"error: {e}"
+        # 個股逐檔行情（ETF 交集表算總資金 / 成本估算三口徑用）
+        try:
+            from app.collectors.twse_stock_price import StockPriceCollector
+            results["stock_price"] = StockPriceCollector(db).collect_all(d)   # 上市+上櫃
+        except Exception as e:
+            results["twse_stock_price"] = f"error: {e}"
+        # ETF 成分股（CHIP-ETF 模組，各投信 PCF；日期以各投信公告的基準日為準）
+        try:
+            from app.collectors.etf_holdings import EtfHoldingCollector
+            results["etf_holdings"] = EtfHoldingCollector(db).collect_all()
+        except Exception as e:
+            results["etf_holdings"] = f"error: {e}"
     finally:
         db.close()
     return {"ok": True, "date": str(d), "results": results}

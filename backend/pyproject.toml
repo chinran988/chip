@@ -19,6 +19,11 @@ dependencies = [
     "browser-cookie3>=0.20.1",
     "ddddocr>=1.6.1",
     "playwright>=1.60.0",
+    # 交易日曆模組（global_calendar）：investing.com 直連會 403，需 curl_cffi 做 Chrome 指紋模擬
+    "curl-cffi>=0.7",
+    "beautifulsoup4>=4.12",
+    # 期貨/衍生品交易所官方行事曆（EUREX/HKEX/JPX/SGX/TAIFEX/CME…）：規則制、含早收
+    "exchange-calendars>=4.10",
 ]
 
 [tool.uv]

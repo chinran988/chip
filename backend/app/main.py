@@ -25,6 +25,8 @@ from app.api.v1.futures import router as futures_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.options import router as options_router
 from app.api.v1.market_margin import router as market_margin_router
+from app.api.v1.etf import router as etf_router, page_router as etf_page_router
+from app.api.v1.global_calendar import router as calendar_router, page_router as calendar_page_router
 
 logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
@@ -103,6 +105,10 @@ app.include_router(reports_router)
 app.include_router(options_router)
 app.include_router(admin_router)
 app.include_router(market_margin_router)
+app.include_router(etf_router)
+app.include_router(etf_page_router)
+app.include_router(calendar_router)
+app.include_router(calendar_page_router)
 
 
 @app.post("/api/restart")

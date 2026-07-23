@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>交易日曆 · CALENDER</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2430; --panel3:#232d3b;
+    --border:#2a3441; --text:#e6edf3; --muted:#8b98a5; --faint:#5b6673;
+    --accent:#3b82f6; --today:#1f6feb; --green:#3fb950; --red:#e5484d;
+    --amber:#e8a33a; --imp1:#c9a227; --imp2:#e8833a; --imp3:#e5484d;
+    --hol:#e5484d; --half:#e8a33a;
+    --appbar1:#111722; --appbar2:#0d1117; --we:#12161d;
+    --todayText:#79b8ff; --todayBg:#15233a; --grpText:#cdd9e5;
+    --holText:#ff8a8d; --halfText:#f0bd6a;
+  }
+  /* 淺色主題（由父頁 ?theme= 或 postMessage 切換） */
+  html[data-theme="light"]{
+    --bg:#f6f8fa; --panel:#ffffff; --panel2:#eef1f5; --panel3:#e3e8ee;
+    --border:#d0d7de; --text:#1f2328; --muted:#57606a; --faint:#8c959f;
+    --today:#0969da; --green:#1a7f37; --red:#cf222e;
+    --imp1:#9a6700; --imp2:#bc4c00; --imp3:#cf222e;
+    --hol:#cf222e; --half:#bc4c00;
+    --appbar1:#ffffff; --appbar2:#f6f8fa; --we:#eaeef2;
+    --todayText:#0969da; --todayBg:#ddf4ff; --grpText:#1f2328;
+    --holText:#cf222e; --halfText:#9a6700;
+  }
+  /* 嵌入模式（pycharts iframe）：隱藏重複的品牌標題列 */
+  html[data-embed] .brand, html[data-embed] #info{display:none}
+  html[data-embed] .appbar{padding:6px 16px}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;font-size:14px}
+  .appbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--appbar1),var(--appbar2));
+    border-bottom:1px solid var(--border);padding:10px 16px}
+  .row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{font-size:16px;font-weight:700;letter-spacing:.5px}
+  .brand .dot{color:var(--accent)}
+  .spacer{flex:1}
+  .info{font-size:12px;color:var(--muted)}
+  .layoutTabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--border);border-radius:9px;padding:3px}
+  .layoutTabs button{background:transparent;border:0;color:var(--muted);padding:7px 12px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:600}
+  .layoutTabs button.on{background:var(--accent);color:#fff}
+  .layoutTabs button:hover:not(.on){color:var(--text)}
+  .controls{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px}
+  .chk{display:inline-flex;align-items:center;gap:7px;cursor:pointer;user-select:none;padding:5px 11px;border:1px solid var(--border);border-radius:20px;background:var(--panel2)}
+  .chk input{accent-color:var(--accent);width:15px;height:15px;margin:0}
+  .chk .sw{width:9px;height:9px;border-radius:50%}
+  .chk.ev .sw{background:var(--accent)} .chk.hol .sw{background:var(--hol)}
+  .chk.off{opacity:.45}
+  select,.navbtn{background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:13px;cursor:pointer}
+  .navbtn:hover{border-color:var(--accent)}
+  .period{font-weight:700;min-width:120px;text-align:center}
+  .lbl{color:var(--muted);font-size:12px}
+  .banner{background:rgba(232,163,58,.14);border-bottom:1px solid rgba(232,163,58,.4);color:var(--halfText);font-size:12px;padding:5px 16px}
+  #stage{padding:16px}
+  .hint{color:var(--muted);font-size:12px;margin:0 16px 10px}
+  .loading{color:var(--muted);text-align:center;padding:60px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px}
+  .imp{letter-spacing:1px;font-size:10px}
+  .imp b{color:var(--faint)} .imp .i1{color:var(--imp1)} .imp .i2{color:var(--imp2)} .imp .i3{color:var(--imp3)}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:4px;font-weight:700}
+  .tag.hol{background:rgba(229,72,77,.18);color:var(--holText);border:1px solid rgba(229,72,77,.4)}
+  .tag.half{background:rgba(232,163,58,.18);color:var(--halfText);border:1px solid rgba(232,163,58,.4)}
+  .muted{color:var(--muted)}
+  .pill{font-size:11px;color:var(--muted);border:1px solid var(--border);border-radius:20px;padding:1px 8px}
+  /* A grid */
+  .gridwrap{display:grid;grid-template-columns:1fr 340px;gap:14px}
+  @media(max-width:1000px){.gridwrap{grid-template-columns:1fr}}
+  .weekhead,.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .weekhead div{color:var(--muted);text-align:center;font-size:12px;padding:2px 0;font-weight:600}
+  .weekhead .we{color:var(--faint)}
+  .cell{background:var(--panel);border:1px solid var(--border);border-radius:9px;min-height:106px;padding:6px 7px;cursor:pointer;position:relative;overflow:hidden}
+  .cell:hover{border-color:var(--accent)}
+  .cell.out{opacity:.3}
+  .cell.we{background:var(--we)}
+  .cell.today{border-color:var(--today);box-shadow:0 0 0 1px var(--today) inset}
+  .cell.sel{outline:2px solid var(--accent)}
+  .dnum{font-weight:700;font-size:13px}
+  .cell.today .dnum{color:var(--todayText)}
+  .holchip{display:flex;align-items:center;gap:4px;font-size:11px;margin-top:3px;background:rgba(229,72,77,.14);border-left:2px solid var(--hol);padding:1px 4px;border-radius:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .holchip.half{background:rgba(232,163,58,.14);border-left-color:var(--half)}
+  .evline{display:flex;align-items:center;gap:4px;font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .evdot{width:7px;height:7px;border-radius:50%;flex:none}
+  .more{font-size:10px;color:var(--muted);margin-top:2px}
+  .drawer{padding:14px}
+  .drawer h3{margin:0 0 2px;font-size:15px}
+  .drawer .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
+  .ditem{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--panel2)}
+  .ditem .t{font-weight:600;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+  .ditem .m{color:var(--muted);font-size:12px;margin-top:3px}
+  .kv{display:flex;gap:12px;font-size:12px;margin-top:5px;color:var(--muted)}
+  .kv b{color:var(--text)}
+  /* B agenda */
+  .agenda{max-width:1080px;margin:0 auto}
+  .dayblk{margin-bottom:16px}
+  .dayhd{position:sticky;top:150px;background:var(--bg);box-shadow:0 6px 8px -6px rgba(0,0,0,.35);padding:6px 4px;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px;z-index:5}
+  .dayhd .d{font-size:16px;font-weight:800} .dayhd .wd{color:var(--muted)}
+  .dayhd.istoday .d{color:var(--todayText)}
+  .sec{margin:8px 0 4px;color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.5px}
+  table.ev{width:100%;border-collapse:collapse}
+  table.ev td,table.ev th{padding:7px 8px;border-bottom:1px solid var(--border);font-size:13px;text-align:left}
+  table.ev th{color:var(--muted);font-weight:600;font-size:11px}
+  table.ev td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .holrow{display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid var(--border)}
+  .holrow .nm{flex:1}
+  /* C timeline */
+  .tlwrap{overflow:auto;max-height:72vh;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+  table.tl{border-collapse:collapse;min-width:100%}
+  table.tl th,table.tl td{border:1px solid var(--border);padding:0}
+  table.tl thead th{background:var(--panel2);color:var(--muted);font-size:11px;font-weight:600;padding:5px 4px;position:sticky;top:0;z-index:3;min-width:32px}
+  table.tl thead th.we{color:var(--faint);background:var(--we)}
+  table.tl thead th.today{color:var(--todayText);background:var(--todayBg)}
+  .mktcol{position:sticky;left:0;background:var(--panel2);z-index:2;min-width:180px;padding:6px 10px!important;text-align:left;white-space:nowrap}
+  table.tl thead th.mktcol{z-index:4}
+  .rgrp td{background:var(--panel3);position:sticky;left:0;cursor:pointer;font-weight:700;padding:6px 10px!important;color:var(--grpText)}
+  .rgrp .cnt{color:var(--muted);font-weight:400;font-size:12px}
+  .tlcell{height:28px;text-align:center;position:relative}
+  .tlcell.we{background:var(--we)}
+  .tlcell.today{box-shadow:0 0 0 2px var(--today) inset}
+  .tlcell.hol{background:repeating-linear-gradient(45deg,rgba(229,72,77,.30),rgba(229,72,77,.30) 5px,rgba(229,72,77,.14) 5px,rgba(229,72,77,.14) 10px)}
+  .tlcell.half{background:repeating-linear-gradient(45deg,rgba(232,163,58,.32),rgba(232,163,58,.32) 5px,rgba(232,163,58,.15) 5px,rgba(232,163,58,.15) 10px)}
+  .evlane td{background:var(--we)}
+  .evmk{display:inline-flex;gap:2px;align-items:center;justify-content:center;height:100%}
+  .evmk .b{width:14px;height:5px;border-radius:2px}
+  .mktname{font-weight:600}.mktctry{color:var(--muted);font-size:11px}
+  /* D dashboard */
+  .dash{display:grid;grid-template-columns:270px 1fr 300px;gap:14px}
+  @media(max-width:1100px){.dash{grid-template-columns:1fr}}
+  .mini .weekhead,.mini .grid{gap:3px}
+  .mini .cell{min-height:0;height:42px;padding:3px 4px;border-radius:6px}
+  .mini .mk{position:absolute;bottom:3px;left:4px;right:4px;display:flex;gap:2px}
+  .mini .mk i{height:3px;border-radius:2px;flex:1;display:block}
+  .panelhd{padding:11px 13px;border-bottom:1px solid var(--border);font-weight:700}
+  .panelbd{padding:12px 13px}
+  .stat{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid var(--border)}
+  .stat:last-child{border-bottom:0}
+  .stat .nm{flex:1}
+  .up{display:flex;gap:9px;padding:9px 4px;border-bottom:1px solid var(--border);align-items:flex-start}
+  .up:last-child{border-bottom:0}
+  .cd{font-variant-numeric:tabular-nums;font-weight:700;color:var(--todayText);font-size:12px;min-width:52px}
+  .empty{color:var(--muted);text-align:center;padding:26px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:0 16px 12px;align-items:center}
+  .legend .sw{width:11px;height:11px;border-radius:3px;display:inline-block;vertical-align:-1px;margin-right:4px}
+</style>
+</head>
+<body>
+<div class="appbar">
+  <div class="row">
+    <span class="brand">📅 交易日曆 <span class="dot">·</span> <span style="font-weight:400;color:var(--muted)">CALENDER</span></span>
+    <span class="info" id="info"></span>
+    <span class="spacer"></span>
+    <div class="layoutTabs" id="tabs">
+      <button data-l="A" class="on">月曆網格</button>
+      <button data-l="B">議程列表</button>
+      <button data-l="C">市場時間軸</button>
+      <button data-l="D">儀表板</button>
+    </div>
+  </div>
+</div>
+<div class="controls">
+  <div class="row">
+    <label class="chk ev" id="ckEv"><input type="checkbox" checked><span class="sw"></span>經濟行事曆</label>
+    <label class="chk hol" id="ckHol"><input type="checkbox" checked><span class="sw"></span>假期</label>
+    <span style="width:1px;height:22px;background:var(--border)"></span>
+    <span class="lbl">地區</span>
+    <select id="selRegion"><option value="all">全部地區</option></select>
+    <span class="lbl">重要性</span>
+    <select id="selImp"><option value="1">全部</option><option value="2">中 以上</option><option value="3">僅 高</option></select>
+    <span class="spacer"></span>
+    <button class="navbtn" id="prev">‹</button>
+    <span class="period" id="period"></span>
+    <button class="navbtn" id="next">›</button>
+    <button class="navbtn" id="today">今天</button>
+  </div>
+</div>
+<div class="banner" id="banner" style="display:none"></div>
+<div class="legend">
+  <span><span class="sw" style="background:var(--hol)"></span>休市</span>
+  <span><span class="sw" style="background:var(--half)"></span>早收</span>
+  <span><span class="imp"><b>●</b><span class="i1">●</span></span> 低</span>
+  <span><span class="imp"><span class="i2">●●</span></span> 中</span>
+  <span><span class="imp"><span class="i3">●●●</span></span> 高</span>
+  <span class="muted">· 時間為台灣時間 GMT+8</span>
+</div>
+<div id="stage"><div class="loading">載入資料中…</div></div>
+
+<script>
+// ── 主題與嵌入模式（父頁 pycharts 經 URL 參數/postMessage 控制）─────────────
+(function(){
+  const q=new URLSearchParams(location.search);
+  if(q.get("embed")==="1") document.documentElement.dataset.embed="1";
+  const t=q.get("theme");
+  if(t==="light"||t==="dark") document.documentElement.dataset.theme=t;
+  window.addEventListener("message",(e)=>{
+    const d=e.data;
+    if(d&&d.type==="theme"&&(d.mode==="light"||d.mode==="dark"))
+      document.documentElement.dataset.theme=d.mode;
+  });
+})();
+// API base 自我偵測：/calendar → /api/v1/calendar；/chip-api/calendar → /chip-api/api/v1/calendar
+const API_BASE = location.pathname.replace(/\/calendar\/?$/, "") + "/api/v1/calendar";
+let TODAY="2026-07-20";
+const WD=["日","一","二","三","四","五","六"];
+let HOL=[], EVT=[], MKTS=[], REGION_ORDER=[], UPCOMING=[];
+const st={layout:"A", ev:true, hol:true, region:"all", imp:1, y:2026, m:6, sel:TODAY, expanded:{}};
+const $=s=>document.querySelector(s), stage=$("#stage");
+const ymd=(y,m,d)=>`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+const parse=s=>{const[a,b,c]=s.split("-").map(Number);return new Date(a,b-1,c)};
+const wd=s=>WD[parse(s).getDay()];
+const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const inRegion=r=>st.region==="all"||r===st.region;
+const impDots=n=>`<span class="imp"><span class="i${n}">${"●".repeat(n)}</span><b>${"●".repeat(3-n)}</b></span>`;
+// 假期附加資訊（早收時間/恢復時間/備註）——investing 無此資料，來自 Google Sheet 等來源
+const holX=x=>{let s="";
+  if(x.close_time)s+=`<div class="m" style="color:var(--halfText)">⏱ 早收 ${esc(x.close_time)}</div>`;
+  if(x.open_time&&x.type!=="早收")s+=`<div class="m">↻ 恢復 ${esc(x.open_time)}</div>`;
+  if(x.note)s+=`<div class="m" style="font-size:11px;opacity:.85">📌 ${esc(x.note)}</div>`;
+  return s;};
+const holXinline=x=>x.close_time?`<span class="muted" style="font-size:11px;margin-left:8px">⏱ ${esc(x.close_time)}</span>`:"";
+const holsOn=d=>st.hol?HOL.filter(h=>h.date===d&&inRegion(h.region)):[];
+const evsOn=d=>st.ev?EVT.filter(e=>e.date===d&&inRegion(e.region)&&e.importance>=st.imp):[];
+const monthName=()=>`${st.y} 年 ${st.m+1} 月`;
+const daysInMonth=()=>new Date(st.y,st.m+1,0).getDate();
+
+const pad=n=>String(n).padStart(2,"0");
+function monthBounds(y,m){                       // m: 0-based
+  return [`${y}-${pad(m+1)}-01`, `${y}-${pad(m+1)}-${new Date(y,m+1,0).getDate()}`];
+}
+async function loadMeta(){
+  const d=await (await fetch(`${API_BASE}/meta`)).json();   // 相對路徑：獨立跑(8080)與嵌在 /cal-api/ 下都正確
+  MKTS=d.markets; REGION_ORDER=d.regionOrder;
+  const sel=$("#selRegion");
+  REGION_ORDER.filter(rg=>MKTS.some(m=>m.region===rg)).forEach(rg=>{
+    const o=document.createElement("option");o.value=rg;o.textContent=rg;sel.appendChild(o);});
+  const firstReg=REGION_ORDER.find(rg=>MKTS.some(m=>m.region===rg));
+  REGION_ORDER.forEach(rg=>st.expanded[rg]=(rg===firstReg));
+  $("#info").textContent=`全球 ${d.countryCount} 國 · ${MKTS.length} 交易所 · 假期 ${d.holidayCount.toLocaleString()} 筆 `
+    +`(${d.holidayRange[0]}~${d.holidayRange[1]}) · 事件 ${d.eventCount.toLocaleString()} 筆`
+    +(d.eventRange[0]?` (${d.eventRange[0]}~${d.eventRange[1]})`:"");
+  const b=$("#banner");
+  if(d.sampleEvents){b.style.display="block";
+    b.textContent="⚠ 假期為 investing.com 真實資料；經濟事件目前為範例（真實爬取進行中，完成後自動替換）。";}
+  else{b.style.display="none";}
+}
+async function loadWindow(){                      // 只取目前檢視月份，資料量大時才不會爆
+  const [a,b]=monthBounds(st.y,st.m);
+  const d=await (await fetch(`${API_BASE}/range?date_from=${a}&date_to=${b}`)).json();
+  HOL=d.holidays; EVT=d.events;
+}
+async function loadUpcoming(){
+  const d=await (await fetch(`${API_BASE}/upcoming?days=120&min_importance=2&limit=40`)).json();
+  UPCOMING=d.events; TODAY=d.today;
+}
+async function goMonth(y,m){ st.y=y; st.m=m; await loadWindow(); render(); }
+async function boot(){
+  try{
+    await loadMeta();
+    await loadUpcoming();
+    const t=parse(TODAY); st.y=t.getFullYear(); st.m=t.getMonth(); st.sel=TODAY;
+    await loadWindow();
+    render();
+  }catch(e){ stage.innerHTML=`<div class="empty">載入失敗：${esc(e.message)}<br>請確認 CHIP 後端已啟動（port 8001）。</div>`; }
+}
+
+/* 控制列 */
+$("#tabs").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  st.layout=b.dataset.l;[...$("#tabs").children].forEach(x=>x.classList.toggle("on",x===b));render()});
+function bindChk(id,key){const el=$(id),cb=el.querySelector("input");
+  cb.addEventListener("change",()=>{st[key]=cb.checked;el.classList.toggle("off",!cb.checked);render()})}
+bindChk("#ckEv","ev");bindChk("#ckHol","hol");
+$("#selRegion").addEventListener("change",e=>{st.region=e.target.value;render()});
+$("#selImp").addEventListener("change",e=>{st.imp=+e.target.value;render()});
+$("#prev").onclick=()=>{let y=st.y,m=st.m-1;if(m<0){m=11;y--}goMonth(y,m)};
+$("#next").onclick=()=>{let y=st.y,m=st.m+1;if(m>11){m=0;y++}goMonth(y,m)};
+$("#today").onclick=()=>{const t=parse(TODAY);st.sel=TODAY;goMonth(t.getFullYear(),t.getMonth())};
+
+/* A 月曆網格 */
+function renderA(){
+  const first=new Date(st.y,st.m,1).getDay(), dim=daysInMonth();
+  let cells="";
+  for(let i=0;i<first;i++)cells+=`<div class="cell out"></div>`;
+  for(let d=1;d<=dim;d++){
+    const ds=ymd(st.y,st.m,d), dow=new Date(st.y,st.m,d).getDay(), we=dow===0||dow===6;
+    const H=holsOn(ds), E=evsOn(ds);
+    let inner=`<div class="dnum">${d}</div>`;
+    H.slice(0,2).forEach(h=>inner+=`<div class="holchip ${h.type==="早收"?"half":""}" title="${esc(h.country)} ${esc(h.exchange)}：${esc(h.name)}">${esc(h.exchange)}</div>`);
+    E.slice(0,H.length?1:3).forEach(e=>inner+=`<div class="evline" title="${esc(e.name)}"><span class="evdot" style="background:var(--imp${e.importance})"></span>${esc(e.time||"")} ${esc(e.name)}</div>`);
+    const shown=H.slice(0,2).length+E.slice(0,H.length?1:3).length, extra=(H.length+E.length)-shown;
+    if(extra>0)inner+=`<div class="more">＋${extra} 項…</div>`;
+    cells+=`<div class="cell ${we?"we":""} ${ds===TODAY?"today":""} ${ds===st.sel?"sel":""}" data-d="${ds}">${inner}</div>`;
+  }
+  const wh=WD.map((w,i)=>`<div class="${i===0||i===6?"we":""}">${w}</div>`).join("");
+  stage.innerHTML=`<div class="gridwrap"><div><div class="weekhead">${wh}</div><div class="grid">${cells}</div></div><div class="card" id="drawer"></div></div>`;
+  stage.querySelectorAll(".cell[data-d]").forEach(c=>c.onclick=()=>{st.sel=c.dataset.d;renderA()});
+  drawDrawer($("#drawer"),st.sel);
+}
+function drawDrawer(el,ds){
+  const H=holsOn(ds),E=evsOn(ds);
+  let h=`<div class="drawer"><h3>${ds.replace(/-/g,"/")} <span class="pill">週${wd(ds)}</span>${ds===TODAY?' <span class="pill" style="border-color:var(--today);color:var(--todayText)">今天</span>':""}</h3><div class="sub">當日 ${H.length} 假期 · ${E.length} 經濟事件</div>`;
+  if(!H.length&&!E.length)h+=`<div class="empty">這天沒有符合條件的項目</div>`;
+  H.forEach(x=>h+=`<div class="ditem"><div class="t">${esc(x.exchange)} <span class="tag ${x.type==="早收"?"half":"hol"}">${x.type}</span></div><div class="m">${esc(x.country)} · ${esc(x.name)}</div>${holX(x)}</div>`);
+  E.forEach(x=>h+=`<div class="ditem"><div class="t">${esc(x.name)} ${impDots(x.importance)}</div><div class="m">${esc(x.time||"")} · ${esc(x.country)}</div><div class="kv"><span>預測 <b>${esc(x.forecast)||"—"}</b></span><span>前值 <b>${esc(x.previous)||"—"}</b></span></div></div>`);
+  el.innerHTML=h+`</div>`;
+}
+
+/* B 議程列表 */
+function renderB(){
+  const dim=daysInMonth();let blk="";
+  for(let d=1;d<=dim;d++){
+    const ds=ymd(st.y,st.m,d),H=holsOn(ds),E=evsOn(ds);
+    if(!H.length&&!E.length)continue;
+    let s=`<div class="dayblk"><div class="dayhd ${ds===TODAY?"istoday":""}"><span class="d">${st.m+1}/${d}</span><span class="wd">週${wd(ds)}</span>${ds===TODAY?'<span class="pill" style="border-color:var(--today);color:var(--todayText)">今天</span>':""}</div>`;
+    if(H.length){s+=`<div class="sec">🏦 交易所假期（${H.length}）</div>`;
+      H.forEach(h=>s+=`<div class="holrow"><b>${esc(h.exchange)}</b><span class="nm muted">${esc(h.country)} · ${esc(h.name)}${holXinline(h)}</span><span class="tag ${h.type==="早收"?"half":"hol"}">${h.type}</span></div>`);}
+    if(E.length){s+=`<div class="sec">📊 經濟數據</div><table class="ev"><tr><th>時間</th><th>國家</th><th>重要性</th><th>事件</th><th style="text-align:right">實際</th><th style="text-align:right">預測</th><th style="text-align:right">前值</th></tr>`;
+      E.forEach(e=>s+=`<tr><td>${esc(e.time||"")}</td><td>${esc(e.country)}</td><td>${impDots(e.importance)}</td><td>${esc(e.name)}</td><td class="num">${esc(e.actual)||"—"}</td><td class="num">${esc(e.forecast)||"—"}</td><td class="num muted">${esc(e.previous)||"—"}</td></tr>`);
+      s+=`</table>`;}
+    blk+=s+`</div>`;
+  }
+  stage.innerHTML=`<div class="agenda">${blk||'<div class="empty">本月沒有符合條件的項目</div>'}</div>`;
+}
+
+/* C 市場時間軸（分區摺疊） */
+function renderC(){
+  const dim=daysInMonth();
+  let head=`<th class="mktcol">市場 ＼ 日</th>`;
+  for(let d=1;d<=dim;d++){const dow=new Date(st.y,st.m,d).getDay(),we=dow===0||dow===6,ds=ymd(st.y,st.m,d);
+    head+=`<th class="${we?"we":""} ${ds===TODAY?"today":""}">${d}<br><span style="font-weight:400">${WD[dow]}</span></th>`;}
+  let body="";
+  // 經濟事件 lane
+  if(st.ev){let evrow=`<tr class="evlane"><td class="mktcol" style="background:var(--we)">📊 經濟事件</td>`;
+    for(let d=1;d<=dim;d++){const ds=ymd(st.y,st.m,d),E=evsOn(ds),dow=new Date(st.y,st.m,d).getDay();
+      let mk="";E.slice().sort((a,b)=>b.importance-a.importance).slice(0,3).forEach(e=>mk+=`<span class="b" style="background:var(--imp${e.importance})" title="${esc(e.time||"")} ${esc(e.name)}"></span>`);
+      evrow+=`<td class="tlcell ${dow===0||dow===6?"we":""} ${ds===TODAY?"today":""}"><span class="evmk">${mk}</span></td>`;}
+    body+=evrow+`</tr>`;}
+  // 市場依區分組摺疊
+  const regions=st.region==="all"?REGION_ORDER.filter(rg=>MKTS.some(m=>m.region===rg)):[st.region];
+  regions.forEach(rg=>{
+    const ms=MKTS.filter(m=>m.region===rg);
+    if(!ms.length)return;
+    const open=st.expanded[rg];
+    body+=`<tr class="rgrp" data-rg="${esc(rg)}"><td colspan="${dim+1}">${open?"▾":"▸"} ${esc(rg)} <span class="cnt">（${ms.length} 交易所）</span></td></tr>`;
+    if(!open)return;
+    ms.forEach(m=>{let r=`<tr><td class="mktcol"><span class="mktname">${esc(m.exchange)}</span> <span class="mktctry">${esc(m.country)}</span></td>`;
+      for(let d=1;d<=dim;d++){const ds=ymd(st.y,st.m,d),dow=new Date(st.y,st.m,d).getDay(),we=dow===0||dow===6;
+        const h=st.hol?HOL.find(x=>x.date===ds&&x.exchange===m.exchange):null;
+        const cls=h?(h.type==="早收"?"half":"hol"):(we?"we":"");
+        r+=`<td class="tlcell ${cls} ${ds===TODAY?"today":""}" title="${h?esc(m.exchange)+" "+esc(h.name)+" "+h.type:""}"></td>`;}
+      body+=r+`</tr>`;});
+  });
+  stage.innerHTML=`<div class="tlwrap"><table class="tl"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
+    <div class="hint">點地區列可摺疊/展開；斜線格＝該交易所當日休市（紅）／早收（黃）；頂列色塊＝經濟事件（色＝重要性）。可捲動。</div>`;
+  stage.querySelectorAll(".rgrp[data-rg]").forEach(tr=>tr.onclick=()=>{const rg=tr.dataset.rg;st.expanded[rg]=!st.expanded[rg];renderC()});
+}
+
+/* D 儀表板 */
+function renderD(){
+  const first=new Date(st.y,st.m,1).getDay(),dim=daysInMonth();
+  let cells="";for(let i=0;i<first;i++)cells+=`<div class="cell out"></div>`;
+  for(let d=1;d<=dim;d++){const ds=ymd(st.y,st.m,d),dow=new Date(st.y,st.m,d).getDay();
+    const H=holsOn(ds),E=evsOn(ds);let mk="";
+    if(H.length)mk+=`<i style="background:var(--hol)"></i>`;
+    if(E.length)mk+=`<i style="background:var(--imp${Math.max(...E.map(e=>e.importance))})"></i>`;
+    cells+=`<div class="cell ${dow===0||dow===6?"we":""} ${ds===TODAY?"today":""} ${ds===st.sel?"sel":""}" data-d="${ds}"><div class="dnum" style="font-size:12px">${d}</div><div class="mk">${mk}</div></div>`;}
+  const wh=WD.map((w,i)=>`<div class="${i===0||i===6?"we":""}">${w}</div>`).join("");
+  const H=holsOn(st.sel),E=evsOn(st.sel);
+  let mid=`<div class="panelhd">${st.sel.replace(/-/g,"/")} 週${wd(st.sel)}${st.sel===TODAY?" · 今天":""}</div><div class="panelbd">`;
+  if(!H.length&&!E.length)mid+=`<div class="empty">這天沒有符合條件的項目</div>`;
+  if(H.length){mid+=`<div class="sec">🏦 交易所假期</div>`;H.forEach(h=>mid+=`<div class="ditem"><div class="t">${esc(h.exchange)} <span class="tag ${h.type==="早收"?"half":"hol"}">${h.type}</span></div><div class="m">${esc(h.country)} · ${esc(h.name)}</div>${holX(h)}</div>`);}
+  if(E.length){mid+=`<div class="sec">📊 經濟數據</div>`;E.forEach(e=>mid+=`<div class="ditem"><div class="t">${esc(e.name)} ${impDots(e.importance)}</div><div class="m">${esc(e.time||"")} · ${esc(e.country)}</div><div class="kv"><span>預測 <b>${esc(e.forecast)||"—"}</b></span><span>前值 <b>${esc(e.previous)||"—"}</b></span></div></div>`);}
+  mid+=`</div>`;
+  // 右：今日休市 + 近期重點
+  const todayHol=(st.hol?HOL.filter(h=>h.date===TODAY&&inRegion(h.region)):[]);
+  let hol=todayHol.length?todayHol.map(h=>`<div class="stat"><span class="nm">${esc(h.exchange)} <span class="muted" style="font-size:12px">${esc(h.country)}</span></span><span class="tag ${h.type==="早收"?"half":"hol"}">${h.type}</span></div>`).join(""):`<div class="empty">今日無休市市場</div>`;
+  const up=UPCOMING.filter(e=>e.importance>=Math.max(st.imp,2)&&inRegion(e.region)).slice(0,7);
+  const t0=parse(TODAY);
+  let upH=up.map(e=>{const dd=Math.round((parse(e.date)-t0)/864e5);return `<div class="up"><span class="cd">${dd===0?"今天":"T+"+dd}</span><div><div>${esc(e.name)} ${impDots(e.importance)}</div><div class="muted" style="font-size:12px">${esc(e.date.slice(5))} ${esc(e.time||"")} · ${esc(e.country)}</div></div></div>`;}).join("")||'<div class="empty">無</div>';
+  stage.innerHTML=`<div class="dash">
+    <div class="card mini"><div class="panelhd">${monthName()}</div><div class="panelbd"><div class="weekhead">${wh}</div><div class="grid">${cells}</div><div class="hint" style="margin:10px 0 0">紅點＝假期 · 彩點＝經濟事件</div></div></div>
+    <div class="card">${mid}</div>
+    <div>
+      <div class="card" style="margin-bottom:14px"><div class="panelhd">🔴 今日休市市場（${TODAY.slice(5)}）</div><div class="panelbd" style="padding-top:4px">${hol}</div></div>
+      <div class="card"><div class="panelhd">🔔 近期重點（中/高）</div><div class="panelbd" style="padding-top:4px">${upH}</div></div>
+    </div></div>`;
+  stage.querySelectorAll(".cell[data-d]").forEach(c=>c.onclick=()=>{st.sel=c.dataset.d;renderD()});
+}
+
+function render(){
+  $("#period").textContent=monthName();
+  ({A:renderA,B:renderB,C:renderC,D:renderD})[st.layout]();
+}
+boot();
+</script>
+</body>
+</html>

@@ -170,6 +170,33 @@ def job_collect_options() -> None:
         db.close()
 
 
+def job_collect_etf() -> None:
+    """ETF 每日成分股採集（CHIP-ETF 模組，各投信 PCF 持股）。
+
+    ※ PCF 只公告當日、無歷史回溯 —— 漏採一天，那天的快照就永久消失，
+      「異動歷史／產業輪動」全靠這裡累積，故本 job 不可停。
+    """
+    today = _today_cst()
+    if not _is_trading_day(today):
+        return
+    db = SessionLocal()
+    try:
+        # 先補當日逐檔行情（交集表「涉及總資金」與成本估算都要用），再採 ETF 持股
+        from app.collectors.twse_stock_price import StockPriceCollector
+        from app.collectors.etf_holdings import EtfHoldingCollector
+        try:
+            n_price = StockPriceCollector(db).collect_all(today)   # 上市+上櫃
+            logger.info("[job_collect_etf] stock_price rows=%s", n_price)
+        except Exception as e:
+            logger.error("[job_collect_etf] stock_price failed: %s", e)
+        results = EtfHoldingCollector(db).collect_all()
+        logger.info("[job_collect_etf] %s results: %s", today, results)
+    except Exception as e:
+        logger.error("[job_collect_etf] error: %s", e, exc_info=True)
+    finally:
+        db.close()
+
+
 def job_fill_calendar() -> None:
     """Ensure trading calendar covers current + next year."""
     db = SessionLocal()
@@ -326,6 +353,10 @@ def create_scheduler() -> BackgroundScheduler:
     # Daily report — 17:30 CST (after process_chip)
     scheduler.add_job(job_generate_report, CronTrigger(hour=17, minute=30, timezone="Asia/Taipei"),
                       id="generate_report", replace_existing=True)
+
+    # ETF 成分股採集 — 17:40 CST（各投信 PCF；排在日報之後，不與其他採集搶資源）
+    scheduler.add_job(job_collect_etf, CronTrigger(hour=17, minute=40, timezone="Asia/Taipei"),
+                      id="collect_etf", replace_existing=True)
 
     # Trading calendar refresh — 1st of each month 08:00 CST
     scheduler.add_job(job_fill_calendar, CronTrigger(day=1, hour=8, minute=0, timezone="Asia/Taipei"),

@@ -230,3 +230,28 @@ class RawMajorHolders(Base):
     holders_count = Column(Integer)        # 1000張以上人數
     total_holders = Column(Integer)        # 總股東人數
     created_at = Column(DateTime, server_default=func.now())
+
+
+class RawStockPrice(Base):
+    """個股每日行情（TWSE MI_INDEX type=ALLBUT0999，tables 中含「收盤價」的那張）。
+
+    CHIP-ETF 模組用途：
+      - 交集表「涉及總資金」＝ Σ(持股股數 × 收盤價)
+      - 異動歷史成本估算三口徑：均價／最低／最高
+        （均價＝成交金額÷成交股數，即當日實際成交均價，非 OHLC 平均）
+    """
+    __tablename__ = "raw_stock_price"
+    __table_args__ = (UniqueConstraint("date", "stock_id", name="uq_price_date_stock"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    stock_id = Column(String(10), nullable=False, index=True)
+    open = Column(Float)
+    high = Column(Float)
+    low = Column(Float)
+    close = Column(Float)
+    avg_price = Column(Float)      # 成交金額 ÷ 成交股數
+    volume = Column(BigInteger)    # 成交股數
+    turnover = Column(BigInteger)  # 成交金額
+    market = Column(String(10), default="twse")  # twse / otc
+    created_at = Column(DateTime, server_default=func.now())

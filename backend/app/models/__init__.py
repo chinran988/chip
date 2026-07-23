@@ -1,1 +1,1 @@
-﻿from app.models import reference, raw, processed  # noqa: F401
+﻿from app.models import reference, raw, processed, etf  # noqa: F401

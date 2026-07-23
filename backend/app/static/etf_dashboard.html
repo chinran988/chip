@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETF 交集表 | CHIP</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --fg:#16181d; --muted:#6b7280; --border:#e3e6ea;
+    --accent:#2563eb; --accent-soft:#eff4ff; --head:#f0f2f5;
+    --pos:#c0392b; --warn:#b7791f; --chip:#f1f3f6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1115; --card:#171a20; --fg:#e6e8ec; --muted:#9aa1ab; --border:#262b33;
+      --accent:#5b8cff; --accent-soft:#1b2436; --head:#1e222a;
+      --pos:#ff6b6b; --warn:#e0a94a; --chip:#20242c;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font:14px/1.5 "Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif}
+  .wrap{max-width:1600px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:20px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:12px;margin-bottom:18px}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+  .stat{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+  .stat .k{color:var(--muted);font-size:12px}
+  .stat .v{font-size:22px;font-weight:700;margin-top:2px;letter-spacing:-.3px}
+  .stat .n{color:var(--muted);font-size:11px}
+  .sec{font-size:13px;font-weight:600;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+  .sec::after{content:"";flex:1;height:1px;background:var(--border)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+  .c{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+  .c .id{font-weight:700;font-size:15px}
+  .c .nm{color:var(--muted);font-size:12px;margin:1px 0 6px;
+         white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c .meta{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+  .tag{display:inline-block;background:var(--chip);border-radius:4px;padding:1px 6px;font-size:10px}
+  .tag.a{background:var(--accent-soft);color:var(--accent)}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:18px 0 10px}
+  select,input,button{font:inherit;color:var(--fg);background:var(--card);
+      border:1px solid var(--border);border-radius:8px;padding:6px 10px}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  .tblwrap{overflow-x:auto;background:var(--card);border:1px solid var(--border);border-radius:10px}
+  table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:right}
+  th{background:var(--head);position:sticky;top:0;font-weight:600;cursor:pointer;user-select:none;font-size:12px}
+  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2),
+  th:nth-child(3),td:nth-child(3),th:nth-child(4),td:nth-child(4){text-align:left}
+  tbody tr:hover{background:var(--accent-soft)}
+  .cover{font-weight:700;color:var(--accent)}
+  /* 迷你矩陣：固定欄序色塊（主動在前、被動在後），色深＝權重高 */
+  .mtx{display:inline-flex;align-items:center;gap:3px}
+  .mtx .gap{width:7px}
+  .mcell{width:13px;height:13px;border-radius:3px;border:1px solid var(--border);background:transparent}
+  .mcell.on.a{background:var(--accent);border-color:var(--accent)}
+  .mcell.on.p{background:var(--muted);border-color:var(--muted)}
+  .mtxlegend{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .mtxlegend .mcell{vertical-align:middle}
+  .muted{color:var(--muted)}
+  .err{color:var(--pos);padding:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ETF 交集表</h1>
+  <div class="sub" id="sub">載入中…</div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="sec">主動式卡片</div>
+  <div class="cards" id="cardsA"></div>
+  <div class="sec">被動式卡片</div>
+  <div class="cards" id="cardsP"></div>
+
+  <div class="bar">
+    <label>最少涵蓋
+      <select id="minEtf">
+        <option value="1">1 張卡片</option><option value="2">2 張卡片</option>
+        <option value="3">3 張卡片</option><option value="4">4 張卡片</option>
+        <option value="5">5 張卡片</option>
+      </select>
+    </label>
+    <input id="q" placeholder="搜尋代號 / 名稱 / 產業" style="min-width:220px">
+    <span class="muted" id="cnt"></span>
+    <span style="flex:1"></span>
+    <span class="mtxlegend" id="mtxLegend"></span>
+    <button id="csv">匯出 CSV</button>
+  </div>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr>
+        <th data-k="idx">#</th><th data-k="stock_id">代號</th><th data-k="stock_name">成分股</th>
+        <th data-k="industry">產業</th><th data-k="n_etf">涵蓋卡片數</th>
+        <th data-k="n_active" title="被主動式 ETF 持有的檔數（≥2 = 主動共識訊號）">主動涵蓋</th>
+        <th data-k="max_weight">最高權重%</th><th data-k="total_amount">總資金(億)</th>
+        <th data-k="total_lots">總張數</th><th id="mtxHead">涵蓋卡片</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const API = "/api/v1/etf";
+let ROWS = [], ETFS = [], MTX_ORDER = [], ACTIVE_IDS = new Set(), sortK = "n_etf", sortDir = -1;
+const nf = n => (n ?? 0).toLocaleString("zh-TW");
+const yi = n => ((n || 0) / 1e8);
+
+async function load(){
+  try{
+    const [sum, list, cross] = await Promise.all([
+      fetch(`${API}/summary`).then(r=>r.json()),
+      fetch(`${API}/list`).then(r=>r.json()),
+      fetch(`${API}/cross?min_etf=1&limit=2000`).then(r=>r.json()),
+    ]);
+    ETFS = list.etfs; ROWS = cross.rows;
+    // 矩陣固定欄序：主動組在前、被動組在後（各依代號排）
+    MTX_ORDER = [...ETFS].sort((a,b)=>(b.is_active-a.is_active)||a.etf_id.localeCompare(b.etf_id));
+    ACTIVE_IDS = new Set(ETFS.filter(e=>e.is_active).map(e=>e.etf_id));
+    ROWS.forEach(r=>{ r.n_active = Object.keys(r.holdings).filter(id=>ACTIVE_IDS.has(id)).length; });
+    document.getElementById("sub").textContent =
+      `資料日期 ${sum.last_update}　·　追蹤 ${sum.etf_total} 檔 ETF　·　每日 17:40 自動更新`;
+    renderStats(sum); renderCards(); renderMtxLegend(); render();
+  }catch(e){
+    document.getElementById("sub").innerHTML =
+      `<span class="err">載入失敗：${e}. 請確認 CHIP 後端 (port 8001) 正在執行。</span>`;
+  }
+}
+
+function renderStats(s){
+  const cards = [
+    ["情有獨鍾", s.solo_count + " 檔", "僅被單一卡片持有"],
+    ["顯示成份股", nf(s.stock_count), "台股成分股合計"],
+    ["最高涵蓋數", `${s.max_cover} / ${s.etf_total}`, s.max_cover_stock || ""],
+    ["概估涉及總資金", yi(s.total_amount).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,",") + " 億",
+      "Σ 持股張數 × 收盤價"],
+    ["有追蹤資料卡片", s.etf_count + " 張", `共 ${s.etf_total} 檔`],
+  ];
+  document.getElementById("stats").innerHTML = cards.map(([k,v,n])=>
+    `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+}
+
+function renderCards(){
+  const mk = e => `<div class="c">
+      <div class="id">${e.etf_id} ${e.is_active?'<span class="tag a">主動</span>':''}</div>
+      <div class="nm" title="${e.name}">${e.name}</div>
+      <div class="meta"><span>${e.issuer}</span><span>${e.n_holdings ?? 0} 檔 · ${e.last_date ?? "—"}</span></div>
+    </div>`;
+  document.getElementById("cardsA").innerHTML = ETFS.filter(e=>e.is_active).map(mk).join("");
+  document.getElementById("cardsP").innerHTML = ETFS.filter(e=>!e.is_active).map(mk).join("");
+}
+
+function view(){
+  const min = +document.getElementById("minEtf").value;
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  let v = ROWS.filter(r => r.n_etf >= min);
+  if(q) v = v.filter(r => (r.stock_id+r.stock_name+(r.industry||"")).toLowerCase().includes(q));
+  v.sort((a,b)=>{
+    const x=a[sortK], y=b[sortK];
+    if(typeof x === "string") return sortDir * x.localeCompare(y);
+    return sortDir * ((x||0)-(y||0));
+  });
+  return v;
+}
+
+// 權重 → 色塊不透明度（越深＝權重越高）
+function wOpacity(w){
+  if(w >= 6)   return 1;
+  if(w >= 3)   return .8;
+  if(w >= 1.5) return .6;
+  if(w >= .5)  return .42;
+  return .28;
+}
+
+function renderMtxLegend(){
+  const nA = ETFS.filter(e=>e.is_active).length;
+  document.getElementById("mtxLegend").innerHTML =
+    `<span><span class="mcell on a" style="opacity:1"></span> 主動</span>` +
+    `<span><span class="mcell on p" style="opacity:1"></span> 被動</span>` +
+    `<span><span class="mcell"></span> 未持有</span>` +
+    `<span>色深＝權重高</span>`;
+  document.getElementById("mtxHead").title =
+    `欄序（左→右）：主動 ${MTX_ORDER.slice(0,nA).map(e=>e.etf_id).join(" ")} ｜ 被動 ${MTX_ORDER.slice(nA).map(e=>e.etf_id).join(" ")}`;
+}
+
+function mtxCells(r){
+  const nA = ETFS.filter(e=>e.is_active).length;
+  return MTX_ORDER.map((e,i)=>{
+    const h = r.holdings[e.etf_id];
+    const gap = i === nA ? '<span class="gap"></span>' : "";
+    if(!h) return `${gap}<span class="mcell" title="${e.etf_id} 未持有"></span>`;
+    const cls = e.is_active ? "a" : "p";
+    const tip = `${e.etf_id} ${e.name}\n權重 ${(h.weight??0).toFixed(2)}%　${nf(h.lots)} 張`;
+    return `${gap}<span class="mcell on ${cls}" style="opacity:${wOpacity(h.weight||0)}" title="${tip}"></span>`;
+  }).join("");
+}
+
+function render(){
+  const v = view();
+  document.getElementById("cnt").textContent = `共 ${v.length} 檔成分股`;
+  document.getElementById("tb").innerHTML = v.map((r,i)=>`<tr>
+      <td class="muted">${i+1}</td>
+      <td>${r.stock_id}</td>
+      <td>${r.stock_name}</td>
+      <td class="muted">${r.industry || "—"}</td>
+      <td class="cover">${r.n_etf}</td>
+      <td class="cover" style="color:${r.n_active>=2?"var(--accent)":"var(--muted)"}">${r.n_active}</td>
+      <td>${(r.max_weight??0).toFixed(2)}%</td>
+      <td>${yi(r.total_amount).toFixed(0)}</td>
+      <td>${nf(r.total_lots)}</td>
+      <td><div class="mtx">${mtxCells(r)}</div></td>
+    </tr>`).join("");
+}
+
+document.querySelectorAll("th[data-k]").forEach(th=>{
+  th.onclick = ()=>{
+    const k = th.dataset.k; if(k==="idx") return;
+    if(sortK===k) sortDir = -sortDir; else { sortK = k; sortDir = -1; }
+    render();
+  };
+});
+document.getElementById("minEtf").onchange = render;
+document.getElementById("q").oninput = render;
+document.getElementById("csv").onclick = ()=>{
+  const head = ["代號","成分股","產業","涵蓋卡片數","主動涵蓋","最高權重%","總資金(億)","總張數","涵蓋卡片"];
+  const lines = [head.join(",")].concat(view().map(r=>[
+    r.stock_id, r.stock_name, r.industry||"", r.n_etf, r.n_active, (r.max_weight??0).toFixed(2),
+    yi(r.total_amount).toFixed(1), r.total_lots,
+    '"'+Object.entries(r.holdings).map(([id,h])=>`${id} ${(h.weight??0).toFixed(2)}%`).join(" / ")+'"'
+  ].join(",")));
+  const blob = new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "etf_cross.csv"; a.click();
+};
+load();
+</script>
+</body>
+</html>

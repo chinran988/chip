@@ -73,6 +73,12 @@ CHIP 後端獨立運行於 port **8001**，PYCHARTs 前端透過 Vite `/chip-api
 | GET | `/api/v1/options/put-call-ratio?days=22` | P/C 比趨勢（最近 N 天） |
 | GET | `/api/v1/options/settlement` | 最後結算價（TAIFEX 代理） |
 | POST | `/api/admin/collect/options` | 手動觸發選擇權採集 |
+| GET | `/api/v1/etf/list` | 追蹤中的 ETF 主檔（14 檔）＋各自最新快照 |
+| GET | `/api/v1/etf/summary` | 交集表卡片數字（情有獨鍾／成份股數／最高涵蓋／涉及總資金） |
+| GET | `/api/v1/etf/cross?min_etf=N` | ETF 交集表矩陣（成分股 × ETF，含產業/權重/總資金/總張數） |
+| GET | `/api/v1/etf/stock/{stock_id}` | 該檔股票被哪些 ETF 持有（「持有ETF」功能用） |
+| GET | `/api/v1/etf/solo` | 情有獨鍾（僅被單一 ETF 持有的成分股） |
+| GET | `/etf` | **ETF 交集表儀表板頁面**（同源 static HTML） |
 | GET | `/api/v1/reports` | 已生成的 Excel 日報清單 |
 | GET | `/api/v1/reports/{date}` | 下載指定日期 Excel |
 | POST | `/api/admin/backfill/chip` | 補抓歷史資料 |
@@ -92,11 +98,25 @@ Admin 端點需 Header：`X-Admin-Key: <key>`
 | 17:05 | 選擇權採集（TAIFEX OpenAPI chain/法人/大額/P/C比） |
 | 17:15 | ChipProcessor 衍生指標計算 |
 | 17:30 | Excel 日報生成 |
+| 17:40 | **個股行情（上市+上櫃）＋ 14 檔 ETF 成分股採集**（PCF 只公告當日、無歷史回溯，此 job 不可停） |
 | 每月1日 08:00 | 交易日曆補充 |
 
 ---
 
 ## Changelog
+
+### v0.11 — 2026-07-21 · CHIP-ETF 模組（ETF 交叉持股分析）
+- **ETF 成分股採集**：`collectors/etf_holdings.py`，14/14 檔全數成功（683 筆持股）。
+  6 家投信（元大／富邦／群益／統一／國泰／復華）**全部純 HTTP**，不需 headless browser。
+- **新表**：`etf_info`、`etf_holdings`（UNIQUE(date, etf_id, stock_id)）
+- **個股行情管線**：新表 `raw_stock_price` + `collectors/twse_stock_price.py`
+  （上市 TWSE MI_INDEX ＋ 上櫃 TPEx OpenAPI），ETF 成分股股價覆蓋率 100%。
+  提供開/高/低/收與當日均價（成交金額÷成交股數），供交集表總資金與後續成本估算使用。
+- **API**：`api/v1/etf.py` 5 支端點；頁面 `GET /etf`（同源 static HTML，比照 `/margin` 模式）
+- **排程**：17:40 `job_collect_etf`，並掛進 `/api/admin/collect/daily`
+- **PYCHARTs 整合**：`ChipPage.tsx` 新增第三分頁「ETF分析」，以 iframe 嵌入本服務 `/etf`
+- 對標 etfcross.com 對帳：情有獨鍾 73 檔、最高涵蓋 13/14、2330 總張數 726,035 — 三項完全一致
+- 詳見 `CHIP-ETF/CHIP開發日誌_2026-07-21_v0.11_ETF模組.docx`
 
 ### v0.6 — 2026-06-28
 - 選擇權籌碼完整實作（P1~P3）：TAIFEX OpenAPI 全商品 13,259 筆鏈資料每日採集
