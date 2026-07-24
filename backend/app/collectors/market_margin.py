@@ -49,7 +49,37 @@ def ensure_table(conn) -> None:
             created_at        TEXT DEFAULT (datetime('now'))
         )
     """)
+    # 疊圖用欄位（後加，容忍已存在）
+    for col, typ in (("taiex", "REAL"), ("txf", "REAL")):
+        try:
+            conn.execute(f"ALTER TABLE market_margin_daily ADD COLUMN {col} {typ}")
+        except Exception:
+            pass
     conn.commit()
+
+
+def fetch_txf(d: date) -> float | None:
+    """台指期(TX)近月收盤 — TAIFEX 日行情報表，可回溯歷史。"""
+    import re
+    import urllib.parse
+    body = urllib.parse.urlencode({
+        "queryType": "2", "marketCode": "0", "MarketCode": "0",
+        "commodity_id": "TX", "commodity_idt": "TX",
+        "queryDate": d.strftime("%Y/%m/%d"),
+    }).encode()
+    req = urllib.request.Request(
+        "https://www.taifex.com.tw/cht/3/futDailyMarketReport", data=body,
+        headers={"User-Agent": "Mozilla/5.0",
+                 "Content-Type": "application/x-www-form-urlencoded"})
+    html = urllib.request.urlopen(req, timeout=45, context=_ctx()).read().decode("utf-8", "ignore")
+    for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", html, re.S):
+        cells = [re.sub(r"<[^>]+>", "", x).strip()
+                 for x in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)]
+        # 近月：第一列 TX + 純數字到期月份（排除價差列 202006/202007）
+        if len(cells) >= 6 and cells[0] == "TX" and cells[1].isdigit():
+            v = _num(cells[5])          # 收盤價
+            return v or None
+    return None
 
 
 def compute_day(d: date) -> dict | None:
@@ -75,16 +105,23 @@ def compute_day(d: date) -> dict | None:
         if sid:
             per[sid] = _num(row[6])
 
-    # 逐檔收盤
+    # 逐檔收盤 + 大盤加權指數（同一支 MI_INDEX）
     mi = _get(f"{_TWSE}/MI_INDEX?response=json&date={ymd}&type=ALLBUT0999")
     close = {}
+    taiex = None
     for t in mi.get("tables", []):
         flds = t.get("fields", [])
         if len(t.get("data", [])) > 500 and "收盤價" in flds:
             ci = flds.index("收盤價")
             for row in t["data"]:
                 close[str(row[0]).strip()] = _num(row[ci])
-            break
+        elif taiex is None and "收盤指數" in flds:
+            ci2 = flds.index("收盤指數")
+            for row in t.get("data", []):
+                # 精確抓「發行量加權股價指數」(價格指數)，排除「…報酬指數」
+                if str(row[0]).strip() == "發行量加權股價指數":
+                    taiex = _num(row[ci2])
+                    break
 
     numer = 0.0  # Σ(張×收盤) = 仟元
     matched = 0
@@ -96,6 +133,10 @@ def compute_day(d: date) -> dict | None:
     if matched == 0:
         return None
     ratio = numer / amount * 100
+    try:
+        txf = fetch_txf(d)
+    except Exception:
+        txf = None
     return {
         "date": d.isoformat(),
         "margin_shares": int(shares or 0),
@@ -103,19 +144,23 @@ def compute_day(d: date) -> dict | None:
         "collateral_value": int(numer),
         "maintenance_ratio": round(ratio, 2),
         "stock_count": matched,
+        "taiex": taiex,
+        "txf": txf,
     }
 
 
 def store_day(conn, rec: dict) -> None:
     conn.execute("""
         INSERT INTO market_margin_daily
-          (date, margin_shares, margin_amount, collateral_value, maintenance_ratio, stock_count)
-        VALUES (:date,:margin_shares,:margin_amount,:collateral_value,:maintenance_ratio,:stock_count)
+          (date, margin_shares, margin_amount, collateral_value, maintenance_ratio, stock_count, taiex, txf)
+        VALUES (:date,:margin_shares,:margin_amount,:collateral_value,:maintenance_ratio,:stock_count,:taiex,:txf)
         ON CONFLICT(date) DO UPDATE SET
           margin_shares=excluded.margin_shares,
           margin_amount=excluded.margin_amount,
           collateral_value=excluded.collateral_value,
           maintenance_ratio=excluded.maintenance_ratio,
-          stock_count=excluded.stock_count
+          stock_count=excluded.stock_count,
+          taiex=COALESCE(excluded.taiex, market_margin_daily.taiex),
+          txf=COALESCE(excluded.txf, market_margin_daily.txf)
     """, rec)
     conn.commit()

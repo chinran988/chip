@@ -28,6 +28,16 @@
   #tip .d{color:var(--muted);font-weight:600;margin-bottom:5px}
   #tip .row{display:flex;justify-content:space-between;gap:16px;margin-top:2px}#tip .row .lab{color:var(--muted)}#tip .row .val{font-weight:700;font-variant-numeric:tabular-nums}
   #tip .up{color:var(--pos)}#tip .down{color:var(--neg)}#tip .sep{height:1px;background:var(--border);margin:6px 0}
+  :root{--taiex:#c9821f;--txf:#8257d4}
+  @media(prefers-color-scheme:dark){:root{--taiex:#e0a44f;--txf:#a98ae8}}
+  :root[data-theme=light]{--taiex:#c9821f;--txf:#8257d4}
+  :root[data-theme=dark]{--taiex:#e0a44f;--txf:#a98ae8}
+  .ovl{display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:wrap}
+  .ck{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;user-select:none}
+  .ck input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;margin:0}
+  .ck .sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+  .ck:hover{color:var(--ink)}
+  .legend{width:100%}
   .detail{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:22px 22px 12px;box-shadow:var(--shadow);margin-bottom:18px}
   .tablewrap{max-height:380px;overflow-y:auto;margin-top:12px;border:1px solid var(--border);border-radius:11px}
   table.dt{width:100%;border-collapse:collapse;font-size:13px}
@@ -52,10 +62,18 @@
   <div class="ranges"><span class="lbl">顯示區間</span><div class="segs" id="segs" role="tablist"></div></div>
   <div class="cards" id="cards"></div>
   <section class="chart"><div class="head"><h2 class="title">融資維持率（%）</h2><span class="range-lbl" id="rlbl1"></span></div>
-    <div class="legend"><span class="lg"><span class="sw"></span>維持率</span><span class="lg"><span class="sw dash"></span>區間均線 <span id="avgLbl" style="color:var(--ink);margin-left:2px"></span></span><span class="pill" id="avgPill"></span></div>
+    <div class="legend"><span class="lg"><span class="sw"></span>維持率</span><span class="lg"><span class="sw dash"></span>區間均線 <span id="avgLbl" style="color:var(--ink);margin-left:2px"></span></span><span class="pill" id="avgPill"></span>
+      <span class="ovl">
+        <label class="ck"><input type="checkbox" data-ov="taiex" data-chart="1"><span class="sw" style="background:var(--taiex)"></span>大盤加權指數</label>
+        <label class="ck"><input type="checkbox" data-ov="txf" data-chart="1"><span class="sw" style="background:var(--txf)"></span>台指期貨</label>
+      </span></div>
     <canvas id="c1"></canvas></section>
   <section class="chart"><div class="head"><h2 class="title">融資餘額（億）</h2><span class="range-lbl" id="rlbl2"></span></div>
-    <div class="legend"><span class="lg"><span class="sw" style="background:var(--balance)"></span>融資餘額</span><span class="pill" id="balPill" style="background:var(--balance-soft);color:var(--balance)"></span></div>
+    <div class="legend"><span class="lg"><span class="sw" style="background:var(--balance)"></span>融資餘額</span><span class="pill" id="balPill" style="background:var(--balance-soft);color:var(--balance)"></span>
+      <span class="ovl">
+        <label class="ck"><input type="checkbox" data-ov="taiex" data-chart="2"><span class="sw" style="background:var(--taiex)"></span>大盤加權指數</label>
+        <label class="ck"><input type="checkbox" data-ov="txf" data-chart="2"><span class="sw" style="background:var(--txf)"></span>台指期貨</label>
+      </span></div>
     <canvas id="c2"></canvas></section>
   <section class="detail"><div class="head"><h2 class="title" id="dtTitle">每日明細</h2><span class="range-lbl" id="dtCount"></span></div>
     <div class="tablewrap"><table class="dt"><thead><tr><th>日期</th><th>融資維持率(%)</th><th>維持率日變(pt)</th><th>融資餘額(億)</th><th>餘額日變(億)</th></tr></thead><tbody id="dtBody"></tbody></table></div></section>
@@ -79,7 +97,7 @@
   try{
     const res=await fetch('/api/v1/market-margin');
     const j=await res.json();
-    series=j.data.map(d=>({t:new Date(d.date+'T00:00:00'),r:d.ratio,b:d.balance_yi}));
+    series=j.data.map(d=>({t:new Date(d.date+'T00:00:00'),r:d.ratio,b:d.balance_yi,taiex:d.taiex,txf:d.txf}));
   }catch(e){ document.getElementById('cards').innerHTML='<div class="card">讀取失敗：'+e+'</div>'; return; }
   if(!series.length){ document.getElementById('cards').innerHTML='<div class="card">尚無資料（回補進行中，稍後重整）</div>'; return; }
 
@@ -116,11 +134,15 @@
   }
   function getVar(n){return getComputedStyle(document.body).getPropertyValue(n).trim();}
   let hoverIdx=null;
-  function draw(){const data=window.__win||windowData();drawChart(document.getElementById('c1'),data,'r',getVar('--accent'),window.__rAvg);drawChart(document.getElementById('c2'),data,'b',getVar('--balance'),null);}
-  function drawChart(cv,data,key,color,avg){
+  const ovState={1:{taiex:false,txf:false},2:{taiex:false,txf:false}};
+  function draw(){const data=window.__win||windowData();drawChart(document.getElementById('c1'),data,'r',getVar('--accent'),window.__rAvg,1);drawChart(document.getElementById('c2'),data,'b',getVar('--balance'),null,2);}
+  function drawChart(cv,data,key,color,avg,cid){
+    const st=ovState[cid]||{};const ovs=[];
+    if(st.taiex)ovs.push({k:'taiex',c:getVar('--taiex')});
+    if(st.txf)ovs.push({k:'txf',c:getVar('--txf')});
     const dpr=Math.min(devicePixelRatio||1,2),W=cv.clientWidth,H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
     const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
-    const pL=54,pR=14,pT=14,pB=26,vals=data.map(p=>p[key]);let lo=Math.min(...vals),hi=Math.max(...vals);const pad=(hi-lo)*.12||1;lo-=pad;hi+=pad;
+    const pL=54,pR=ovs.length?60:14,pT=14,pB=26,vals=data.map(p=>p[key]);let lo=Math.min(...vals),hi=Math.max(...vals);const pad=(hi-lo)*.12||1;lo-=pad;hi+=pad;
     const X=i=>pL+(W-pL-pR)*(i/(data.length-1||1)),Y=v=>pT+(H-pT-pB)*(1-(v-lo)/(hi-lo));
     cv.__geo={pL,pR,pT,pB,W,H,n:data.length};
     const grid=getVar('--grid'),muted=getVar('--faint');g.font='11px system-ui';g.textBaseline='middle';
@@ -131,6 +153,22 @@
     if(avg!=null){g.save();g.setLineDash([5,4]);g.strokeStyle=getVar('--avg');g.lineWidth=1.4;g.beginPath();g.moveTo(pL,Y(avg));g.lineTo(W-pR,Y(avg));g.stroke();g.restore();}
     g.beginPath();g.moveTo(X(0),Y(vals[0]));for(let i=1;i<data.length;i++)g.lineTo(X(i),Y(vals[i]));g.strokeStyle=color;g.lineWidth=2;g.lineJoin='round';g.stroke();
     const lx=X(data.length-1),ly=Y(vals[vals.length-1]);g.fillStyle=getVar('--surface');g.strokeStyle=color;g.lineWidth=2.5;g.beginPath();g.arc(lx,ly,4.5,0,7);g.fill();g.stroke();
+    // 疊圖：大盤加權指數 / 台指期（共用右側次要 Y 軸）
+    if(ovs.length){
+      let olo=Infinity,ohi=-Infinity;
+      ovs.forEach(o=>data.forEach(p=>{const v=p[o.k];if(v!=null){if(v<olo)olo=v;if(v>ohi)ohi=v;}}));
+      if(olo<ohi){
+        const op=(ohi-olo)*.12||1;olo-=op;ohi+=op;
+        const OY=v=>pT+(H-pT-pB)*(1-(v-olo)/(ohi-olo));
+        g.textAlign='left';g.textBaseline='middle';g.fillStyle=muted;g.font='11px system-ui';
+        for(let i=0;i<=4;i++){const v=olo+(ohi-olo)*i/4;g.fillText(Math.round(v).toLocaleString(),W-pR+6,OY(v));}
+        ovs.forEach(o=>{g.beginPath();let pen=false;
+          data.forEach((p,i)=>{const v=p[o.k];
+            if(v==null){pen=false;return;}      // 缺值斷線，不跨空隙連直線
+            const x=X(i),y=OY(v);if(!pen){g.moveTo(x,y);pen=true;}else g.lineTo(x,y);});
+          g.strokeStyle=o.c;g.lineWidth=1.6;g.lineJoin='round';g.stroke();});
+      }
+    }
     // 十字虛線（兩圖同步：同一 index 在兩圖都畫）
     if(hoverIdx!=null && hoverIdx>=0 && hoverIdx<data.length){
       const cx=X(hoverIdx),cy=Y(vals[hoverIdx]);
@@ -146,9 +184,15 @@
   // ── 十字虛線滑鼠事件（兩圖同步 + tooltip）──
   const tip=document.getElementById('tip');
   function idxFromX(cv,cx){const geo=cv.__geo;if(!geo)return 0;const r=cv.getBoundingClientRect();let i=Math.round((cx-r.left-geo.pL)/(geo.W-geo.pL-geo.pR)*(geo.n-1));return Math.max(0,Math.min(geo.n-1,i));}
-  function onMove(e){hoverIdx=idxFromX(e.currentTarget,e.clientX);draw();const w=window.__win||[];const p=w[hoverIdx];if(!p)return;const prev=w[hoverIdx-1]||p,dr=p.r-prev.r,db=p.b-prev.b;tip.style.opacity='1';tip.innerHTML=`<div class="d">${fmtYMD(p.t)}</div><div class="row"><span class="lab">維持率</span><span class="val" style="color:var(--accent)">${p.r.toFixed(2)}%</span></div><div class="row"><span class="lab">　較前日</span><span class="val ${dr>=0?'up':'down'}">${dr>=0?'+':''}${dr.toFixed(2)} pt</span></div><div class="sep"></div><div class="row"><span class="lab">融資餘額</span><span class="val" style="color:var(--balance)">${money(p.b)} 億</span></div><div class="row"><span class="lab">　較前日</span><span class="val ${db>=0?'up':'down'}">${db>=0?'+':''}${money(db)} 億</span></div>`;let tx=e.clientX+16,ty=e.clientY+16;if(tx+tip.offsetWidth>innerWidth)tx=e.clientX-tip.offsetWidth-16;if(ty+tip.offsetHeight>innerHeight)ty=e.clientY-tip.offsetHeight-16;tip.style.left=tx+'px';tip.style.top=ty+'px';}
+  function onMove(e){hoverIdx=idxFromX(e.currentTarget,e.clientX);draw();const w=window.__win||[];const p=w[hoverIdx];if(!p)return;const prev=w[hoverIdx-1]||p,dr=p.r-prev.r,db=p.b-prev.b;tip.style.opacity='1';tip.innerHTML=`<div class="d">${fmtYMD(p.t)}</div><div class="row"><span class="lab">維持率</span><span class="val" style="color:var(--accent)">${p.r.toFixed(2)}%</span></div><div class="row"><span class="lab">　較前日</span><span class="val ${dr>=0?'up':'down'}">${dr>=0?'+':''}${dr.toFixed(2)} pt</span></div><div class="sep"></div><div class="row"><span class="lab">融資餘額</span><span class="val" style="color:var(--balance)">${money(p.b)} 億</span></div><div class="row"><span class="lab">　較前日</span><span class="val ${db>=0?'up':'down'}">${db>=0?'+':''}${money(db)} 億</span></div>`+
+      (((ovState[1].taiex||ovState[2].taiex)&&p.taiex!=null)?`<div class="sep"></div><div class="row"><span class="lab">加權指數</span><span class="val" style="color:var(--taiex)">${money(p.taiex)}</span></div>`:'')+
+      (((ovState[1].txf||ovState[2].txf)&&p.txf!=null)?`<div class="row"><span class="lab">台指期貨</span><span class="val" style="color:var(--txf)">${money(p.txf)}</span></div>`:'');let tx=e.clientX+16,ty=e.clientY+16;if(tx+tip.offsetWidth>innerWidth)tx=e.clientX-tip.offsetWidth-16;if(ty+tip.offsetHeight>innerHeight)ty=e.clientY-tip.offsetHeight-16;tip.style.left=tx+'px';tip.style.top=ty+'px';}
   function onLeave(){hoverIdx=null;draw();tip.style.opacity='0';}
   ['c1','c2'].forEach(id=>{const cv=document.getElementById(id);cv.addEventListener('mousemove',onMove);cv.addEventListener('mouseleave',onLeave);});
+  // 疊圖勾選
+  document.querySelectorAll('.ck input[data-ov]').forEach(inp=>{
+    inp.addEventListener('change',()=>{ovState[inp.dataset.chart][inp.dataset.ov]=inp.checked;draw();});
+  });
 
   document.getElementById('dlBtn').addEventListener('click',()=>{const rows=[['日期','融資維持率(%)','融資餘額(億)']].concat(series.slice().reverse().map(p=>[fmtYMD(p.t),p.r,Math.round(p.b)]));const csv='﻿'+rows.map(r=>r.join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download=`台股整體融資維持率_${fmtYMD(end)}.csv`;document.body.appendChild(a);a.click();a.remove();});
 

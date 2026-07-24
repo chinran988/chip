@@ -30,7 +30,7 @@ def market_margin(days: int = Query(default=0, description="只回最近 N 交�
     db = next(get_db())
     try:
         sql = """
-            SELECT date, maintenance_ratio, margin_amount, margin_shares, stock_count
+            SELECT date, maintenance_ratio, margin_amount, margin_shares, stock_count, taiex, txf
             FROM market_margin_daily ORDER BY date
         """
         rows = db.execute(text(sql)).fetchall()
@@ -42,6 +42,8 @@ def market_margin(days: int = Query(default=0, description="只回最近 N 交�
         "balance_yi": round((r[2] or 0) / 1e5, 1),
         "shares": r[3],
         "stock_count": r[4],
+        "taiex": r[5],   # 大盤加權指數
+        "txf": r[6],     # 台指期近月
     } for r in rows]
     if days and days > 0:
         data = data[-days:]
