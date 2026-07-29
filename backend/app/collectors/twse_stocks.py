@@ -19,19 +19,33 @@ class StockListCollector(BaseCollector):
     # ── TWSE OpenAPI ──────────────────────────────────────────────────────
 
     def fetch(self, target_date: date) -> dict:
-        """Fetch listed (TWSE) and OTC (TPEX) stock lists."""
+        """Fetch listed (TWSE) + listed ETF + OTC (TPEX) stock lists."""
         listed = self._fetch_twse_listed()
+        listed_etf = self._fetch_twse_etf()
         otc = self._fetch_tpex_otc()
-        return {"listed": listed, "otc": otc}
+        return {"listed": listed, "listed_etf": listed_etf, "otc": otc}
 
     def _fetch_twse_listed(self) -> list[dict]:
-        """上市公司基本資料 — TWSE OpenAPI v1."""
+        """上市公司基本資料 — TWSE OpenAPI v1（僅普通股公司，不含 ETF）。"""
         url = f"{settings.TWSE_OPENAPI_URL}/v1/opendata/t187ap03_L"
         try:
             resp = self.get(url, referer=settings.TWSE_BASE_URL)
             return resp.json()
         except Exception as e:
             logger.warning("TWSE OpenAPI listed stocks failed: %s", e)
+            return []
+
+    def _fetch_twse_etf(self) -> list[dict]:
+        """上市 ETF — TWSE OpenAPI 每日收盤行情全部（STOCK_DAY_ALL 含 ETF，00 開頭）。
+        取代舊的 Sinopac adapter 補充（永豐屬 PYCHARTs，CHIP 改走純公開 API）。"""
+        import re
+        url = f"{settings.TWSE_OPENAPI_URL}/v1/exchangeReport/STOCK_DAY_ALL"
+        try:
+            resp = self.get(url, referer=settings.TWSE_BASE_URL)
+            return [r for r in resp.json()
+                    if re.match(r"^00\d", str(r.get("Code", "")).strip())]
+        except Exception as e:
+            logger.warning("TWSE OpenAPI ETF list failed: %s", e)
             return []
 
     def _fetch_tpex_otc(self) -> list[dict]:
@@ -61,6 +75,22 @@ class StockListCollector(BaseCollector):
                 "isin": str(item.get("國際證券辨識號碼", "") or "").strip(),
                 "is_active": True,
                 "source": "twse",
+            })
+
+        # TWSE listed ETF (STOCK_DAY_ALL, 00 開頭) — Code/Name 欄位
+        for item in raw.get("listed_etf", []):
+            stock_id = str(item.get("Code", "")).strip()
+            if not stock_id or any(r["stock_id"] == stock_id for r in rows):
+                continue
+            rows.append({
+                "stock_id": stock_id,
+                "name": str(item.get("Name", "")).strip(),
+                "market": "twse",
+                "industry": "ETF",
+                "industry_code": "",
+                "isin": "",
+                "is_active": True,
+                "source": "twse_openapi",
             })
 
         # TPEX OTC — different field names
