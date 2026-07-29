@@ -105,6 +105,17 @@ Admin 端點需 Header：`X-Admin-Key: <key>`
 
 ## Changelog
 
+### v0.12 — 2026-07-29 · 上櫃法人 Bug 根治 + 融資斷層修復
+- **修正上櫃法人 `_find` 欄名撞名 Bug**（`collectors/tpex_chip.py`）：TPEx OpenAPI 欄名
+  「Foreign Investors …(Foreign **Dealers** excluded)」含 "Dealers"，舊模糊匹配致
+  `foreign_buy/sell` 翻倍、`dealer_buy/sell` 抄成外資值（投信正常）。影響全部上櫃法人資料。
+  修法：`_find` 加 `!排除` 關鍵字；外資改用合計欄、自營排除 Foreign。對官方查詢頁 ground truth 驗證一致。
+- **融資券餘額斷層修復**：7/24 補 raw 後未重跑 ChipProcessor 致衍生表為 0；回補 7/14/16/17 上櫃融資。
+- **關鍵發現**：TPEx 提供免 Turnstile 歷史查詢頁（`margin/balance`、`insti/dailyTrade` 真吃 date），
+  可回補融資/法人歷史；但分點 `brokerBS` 假吃 date、僅當日不可補（三日期實測證實）。
+- 歷史 11 天（7/14~7/28）用查詢頁定位欄重抽上櫃法人 + 重跑 ChipProcessor。
+- 詳見 `CHIP開發日誌_2026-07-29_v0.12.docx`
+
 ### v0.11 — 2026-07-21 · CHIP-ETF 模組（ETF 交叉持股分析）
 - **ETF 成分股採集**：`collectors/etf_holdings.py`，14/14 檔全數成功（683 筆持股）。
   6 家投信（元大／富邦／群益／統一／國泰／復華）**全部純 HTTP**，不需 headless browser。

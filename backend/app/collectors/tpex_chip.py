@@ -41,11 +41,17 @@ def _num(v) -> int:
 
 
 def _find(row: dict, *keywords: str) -> int:
-    """回傳第一個 key 同時包含所有 keyword(不分大小寫/空格) 的值。"""
-    kws = [k.replace(" ", "").lower() for k in keywords]
+    """回傳第一個 key 同時包含所有 include keyword、且不含任何 !exclude keyword 的值（不分大小寫/空格）。
+
+    以 "!xxx" 傳入排除關鍵字。用來解 TPEx OpenAPI 欄名撞名：
+    「Foreign Investors …(Foreign Dealers excluded)」同時含 "Dealers"，
+    若不排除會被 dealer 匹配誤抓、外資也會被重複相加（2026-07-29 修正）。
+    """
+    incl = [k.replace(" ", "").lower() for k in keywords if not k.startswith("!")]
+    excl = [k[1:].replace(" ", "").lower() for k in keywords if k.startswith("!")]
     for k, v in row.items():
         kk = k.replace(" ", "").lower()
-        if all(w in kk for w in kws):
+        if all(w in kk for w in incl) and not any(w in kk for w in excl):
             return _num(v)
     return 0
 
@@ -78,16 +84,18 @@ class TpexChipCollector(BaseCollector):
             sid = str(r.get("SecuritiesCompanyCode", "")).strip()
             if not sid:
                 continue
-            # 外資 = 外資(不含外資自營) + 外資自營
-            foreign_buy  = _find(r, "Foreign", "excluded", "TotalBuy")  + _find(r, "ForeignDealers", "TotalBuy")
-            foreign_sell = _find(r, "Foreign", "excluded", "TotalSell") + _find(r, "ForeignDealers", "TotalSell")
+            # 外資 = 外資及陸資「合計」欄（OpenAPI 已含自營；勿用「不含自營」再自行相加，
+            #   舊寫法因欄名含 "Foreign Dealers excluded" 被 ForeignDealers 二次命中→外資翻倍）
+            foreign_buy  = _find(r, "ForeignInvestorsInclude", "TotalBuy",  "!excluded", "!Dealers")
+            foreign_sell = _find(r, "ForeignInvestorsInclude", "TotalSell", "!excluded", "!Dealers")
             rows.append({
                 "date": target_date, "stock_id": sid,
                 "foreign_buy": foreign_buy, "foreign_sell": foreign_sell,
                 "trust_buy":  _find(r, "InvestmentTrust", "TotalBuy"),
                 "trust_sell": _find(r, "InvestmentTrust", "TotalSell"),
-                "dealer_buy":  _find(r, "Dealers", "TotalBuy"),
-                "dealer_sell": _find(r, "Dealers", "TotalSell"),
+                # 自營商合計；排除 Foreign 以免抓到「Foreign Dealers excluded」欄（舊 bug=dealer 抄成外資）
+                "dealer_buy":  _find(r, "Dealers", "TotalBuy",  "!Foreign", "!excluded"),
+                "dealer_sell": _find(r, "Dealers", "TotalSell", "!Foreign", "!excluded"),
                 "dealer_hedge_buy": 0, "dealer_hedge_sell": 0,
             })
         if rows:
