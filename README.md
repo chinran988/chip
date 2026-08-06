@@ -105,6 +105,15 @@ Admin 端點需 Header：`X-Admin-Key: <key>`
 
 ## Changelog
 
+### v0.13 — 2026-08-05 · 上櫃融資早上補採排程
+- **新增 `job_backfill_tpex_margin`**（`scheduler/jobs.py`，每日 10:00 CST）：
+  TPEx OpenAPI 上櫃融資「當晚不更新、隔天早上約 09:29 才放出」，故 20:33 當晚採集永遠拿到 0。
+  此 job 每早用**免 Turnstile 的查詢頁** `margin/balance?date=前一交易日` 直接補，
+  寫 raw_margin 後重跑 ChipProcessor；含日期防呆（`tables[0].date` 不符則不寫）。
+  仿 05:35 夜盤 OI job（同為「資料當天不出來、隔天早上補」）的模式。
+- 新增 `_prev_trading_date` 輔助（依交易日曆往回找最近交易日，週末自動跳）。
+- 解決先前每日上櫃融資都需人工回補的結構性缺口。
+
 ### v0.12 — 2026-07-29 · 上櫃法人 Bug 根治 + 融資斷層修復
 - **修正上櫃法人 `_find` 欄名撞名 Bug**（`collectors/tpex_chip.py`）：TPEx OpenAPI 欄名
   「Foreign Investors …(Foreign **Dealers** excluded)」含 "Dealers"，舊模糊匹配致

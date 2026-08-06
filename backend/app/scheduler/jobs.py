@@ -321,6 +321,82 @@ def job_collect_night_session() -> None:
         db.close()
 
 
+def _prev_trading_date(before: date) -> date | None:
+    """回傳 before 之前最近的一個交易日（往回找最多 10 天）。"""
+    d = before - timedelta(days=1)
+    for _ in range(10):
+        if _is_trading_day(d):
+            return d
+        d -= timedelta(days=1)
+    return None
+
+
+def job_backfill_tpex_margin() -> None:
+    """上櫃融資補採 — 10:00 CST。
+
+    TPEx OpenAPI 的上櫃融資「當晚不更新、隔天早上才有」（實測約 09:29 才放出），
+    故 20:33 的當晚採集永遠拿到 0。此 job 每早用**免 Turnstile 的查詢頁**
+    `margin/balance?date=前一交易日` 直接補，寫 raw_margin 後重跑 ChipProcessor。
+    仿 05:35 夜盤 job（同樣是「資料當天不出來、隔天早上補」）的模式。
+    """
+    import ssl as _ssl
+    import json as _json
+    import urllib.request as _req
+
+    target = _prev_trading_date(_today_cst())
+    if not target:
+        logger.info("[job_backfill_tpex_margin] 找不到前一交易日，skip")
+        return
+    roc = f"{target.year - 1911}/{target.month:02d}/{target.day:02d}"
+    url = (f"https://www.tpex.org.tw/www/zh-tw/margin/balance"
+           f"?date={target.year}/{target.month:02d}/{target.day:02d}&id=&response=json")
+    ctx = _ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = _ssl.CERT_NONE
+
+    def _num(v) -> int:
+        try:
+            return int(float(str(v).replace(",", "").strip() or "0"))
+        except (ValueError, TypeError):
+            return 0
+
+    db = SessionLocal()
+    try:
+        r = _req.Request(url, headers={"User-Agent": "Mozilla/5.0",
+                                       "Referer": "https://www.tpex.org.tw/"})
+        j = _json.loads(_req.urlopen(r, timeout=60, context=ctx).read().decode("utf-8", "replace"))
+        tbl = j["tables"][0]
+        if tbl.get("date") != roc:  # 日期防呆：對不上就不寫，避免污染
+            logger.warning("[job_backfill_tpex_margin] 日期不符 got=%s want=%s，skip",
+                           tbl.get("date"), roc)
+            return
+        from app.collectors.tpex_chip import TpexChipCollector
+        from app.models.raw import RawMargin
+        from app.processors.chip_processor import ChipProcessor
+        # 查詢頁欄序：0代號 3資買 4資賣 6資餘額 9資限額 11券賣 13券償 14券餘額 17券限額
+        rows = []
+        for row in tbl["data"]:
+            sid = str(row[0]).strip()
+            if not sid:
+                continue
+            rows.append({
+                "date": target, "stock_id": sid,
+                "margin_buy": _num(row[3]), "margin_sell": _num(row[4]),
+                "margin_balance": _num(row[6]), "margin_limit": _num(row[9]),
+                "short_sell": _num(row[11]), "short_buy": _num(row[13]),
+                "short_balance": _num(row[14]), "short_limit": _num(row[17]),
+            })
+        if rows:
+            TpexChipCollector(db).upsert(RawMargin, rows, ["date", "stock_id"])
+            db.commit()
+        n = ChipProcessor(db).process(target)
+        logger.info("[job_backfill_tpex_margin] %s 上櫃融資 %d 筆補完, processed=%d", target, len(rows), n)
+    except Exception as e:
+        logger.error("[job_backfill_tpex_margin] error: %s", e, exc_info=True)
+    finally:
+        db.close()
+
+
 # ── Scheduler factory ─────────────────────────────────────────────────────
 
 def create_scheduler() -> BackgroundScheduler:
@@ -333,6 +409,10 @@ def create_scheduler() -> BackgroundScheduler:
     # 夜盤採集 — 05:35 CST（盤後 05:00 收盤，TAIFEX 05:30 發布盤後量/收盤，05:35 兩步驟：採集+補OI）
     scheduler.add_job(job_collect_night_session, CronTrigger(hour=5, minute=35, timezone="Asia/Taipei"),
                       id="collect_night_session", replace_existing=True)
+
+    # 上櫃融資補採 — 10:00 CST（TPEx OpenAPI 當晚不更新、隔天早上約 09:29 才放出，補前一交易日）
+    scheduler.add_job(job_backfill_tpex_margin, CronTrigger(hour=10, minute=0, timezone="Asia/Taipei"),
+                      id="backfill_tpex_margin", replace_existing=True)
 
     # Main daily collection — 16:35 CST (after TWSE closes + publishes)
     scheduler.add_job(job_daily_collect, CronTrigger(hour=16, minute=35, timezone="Asia/Taipei"),
