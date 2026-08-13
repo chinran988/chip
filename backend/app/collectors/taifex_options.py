@@ -62,7 +62,9 @@ def _parse_date(s: str) -> date | None:
 def _fetch_json(endpoint: str) -> list[dict]:
     resp = requests.get(f"{_BASE}{endpoint}", headers=_HEADERS, timeout=60)
     resp.raise_for_status()
-    return json.loads(resp.content.decode("utf-8"))
+    # utf-8-sig：TAIFEX /DailyMarketReportOpt（選擇權鏈）近日開始回傳 UTF-8 BOM，
+    # 純 utf-8 解碼會使 json.loads 拋 "Unexpected UTF-8 BOM"；utf-8-sig 自動吃 BOM，無 BOM 也正常（2026-08-10 修）。
+    return json.loads(resp.content.decode("utf-8-sig"))
 
 
 class TaifexOptionsCollector(BaseCollector):
@@ -108,7 +110,10 @@ class TaifexOptionsCollector(BaseCollector):
             if not d:
                 continue
             try:
-                strike = int(str(r.get("StrikePrice", "0")).replace(",", "").strip())
+                # 個股選擇權有小數履約價（實測 2026-08-12：CBA 17.5/18.5…全為 .5 半點，約 22 個契約）。
+                # 舊寫法 int('17.5') 拋 ValueError→全塌成 0→同契約衝突鍵重複→同批 upsert 崩。
+                # round(,2) 防未來 TAIFEX 改 .05/.25 等精度時污染 unique key。
+                strike = round(float(str(r.get("StrikePrice", "0")).replace(",", "").strip()), 2)
             except Exception:
                 strike = 0
             session_raw = str(r.get("TradingSession", "")).strip()

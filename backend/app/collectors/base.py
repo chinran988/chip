@@ -90,6 +90,11 @@ class BaseCollector(ABC):
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
         if not rows:
             return 0
+        # 按 conflict_cols 去重（保留最後一筆）：同一批 .values() 內若有重複衝突鍵，
+        # SQLite ON CONFLICT DO UPDATE 無法對同列動兩次，SQLAlchemy 會拋 ArgumentError
+        # （2026-08-12 選擇權鏈實際踩到：小數履約價塌成 0 致鍵重複、同批即崩）。
+        deduped = {tuple(r[c] for c in conflict_cols): r for r in rows}
+        rows = list(deduped.values())
         # SQLite max variables = 999; batch size = floor(999 / n_cols)
         n_cols = len(rows[0])
         batch_size = max(1, 999 // n_cols)

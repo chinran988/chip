@@ -105,6 +105,17 @@ Admin 端點需 Header：`X-Admin-Key: <key>`
 
 ## Changelog
 
+### v0.14 — 2026-08-13 · 選擇權小數履約價修正 + upsert 批內去重
+- **修正選擇權鏈 strike 解析**（`collectors/taifex_options.py`）：個股選擇權有小數履約價
+  （17.5/18.5…，約 22 個契約），舊 `int()` 解析拋錯全塌成 0 → 同契約衝突鍵重複 →
+  同批 upsert 崩（`ON CONFLICT` 無法對同列動兩次，8/12 實際踩到、間歇性取決於批次邊界）。
+  改 `round(float(), 2)`；model `RawOptionsChain.strike` Integer→Float（SQLite 鬆型別免遷移）。
+- **upsert 批內去重**（`collectors/base.py`）：`.values()` 前按 conflict_cols 去重（保留最後），
+  通用安全網，防任何 collector 同批重複鍵崩。
+- 8/12 選擇權鏈 13,059 筆已補齊（小數 strike 376 筆正確保留）。
+- 已知限制：歷史各日 ~77 筆 strike=0 塌陷殘留（全歷史 2,240 筆）為舊 bug 產物，
+  TAIFEX chain 端點僅供最新、無法回補正確值。
+
 ### v0.13 — 2026-08-05 · 上櫃融資早上補採排程
 - **新增 `job_backfill_tpex_margin`**（`scheduler/jobs.py`，每日 10:00 CST）：
   TPEx OpenAPI 上櫃融資「當晚不更新、隔天早上約 09:29 才放出」，故 20:33 當晚採集永遠拿到 0。

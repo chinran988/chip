@@ -9,13 +9,14 @@ class RawOptionsChain(Base):
     __tablename__ = "raw_options_chain"
     __table_args__ = (
         UniqueConstraint("date", "contract", "expiry", "strike", "call_put", "trading_session", name="uq_opt_chain"),
+        # strike 為 Float：個股選擇權有小數履約價（17.5 等），SQLite 欄位鬆型別、舊整數值不需遷移（2026-08-13）
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(Date, nullable=False, index=True)
     contract = Column(String(20), nullable=False, index=True)
     expiry = Column(String(20), nullable=False)
-    strike = Column(Integer, nullable=False)
+    strike = Column(Float, nullable=False)
     call_put = Column(String(4), nullable=False)
     trading_session = Column(String(10), nullable=False, default="一般")  # 一般（日盤）/ 盤後（夜盤）
     open = Column(Float)
