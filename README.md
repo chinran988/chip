@@ -113,8 +113,10 @@ Admin 端點需 Header：`X-Admin-Key: <key>`
 - **upsert 批內去重**（`collectors/base.py`）：`.values()` 前按 conflict_cols 去重（保留最後），
   通用安全網，防任何 collector 同批重複鍵崩。
 - 8/12 選擇權鏈 13,059 筆已補齊（小數 strike 376 筆正確保留）。
-- 已知限制：歷史各日 ~77 筆 strike=0 塌陷殘留（全歷史 2,240 筆）為舊 bug 產物，
-  TAIFEX chain 端點僅供最新、無法回補正確值。
+- **歷史已全量回補**（`scripts/backfill_options_hist.py`）：TAIFEX 官網查詢頁
+  `optDailyMarketReport`（POST queryDate）歷史可查——逐受損組合重抓 638/638 全成功、
+  刪除 2,240 筆 strike=0 塌陷殘骸、救回每日 332~379 筆小數履約價 × 33 交易日
+  （2026-06-26~08-12），全表唯一鍵零重複。OpenAPI 僅供最新，歷史修復一律走查詢頁。
 
 ### v0.13 — 2026-08-05 · 上櫃融資早上補採排程
 - **新增 `job_backfill_tpex_margin`**（`scheduler/jobs.py`，每日 10:00 CST）：
