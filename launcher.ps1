@@ -9,8 +9,18 @@ $ErrorActionPreference    = "Continue"
 
 $chipDir    = $PSScriptRoot
 $backendDir = Join-Path $chipDir "backend"
-$uvExe      = "$env:LOCALAPPDATA\uv\bin\uv.exe"
-$env:PATH   = "$env:LOCALAPPDATA\uv\bin;" + $env:PATH
+# uv 位置隨安裝器版本而異：新版裝 ~\.local\bin、舊版裝 %LOCALAPPDATA%\uv\bin。
+# 兩處都前置 PATH，再依序解析（PATH → 新位置 → 舊位置）。
+$env:PATH = "$env:USERPROFILE\.local\bin;$env:LOCALAPPDATA\uv\bin;" + $env:PATH
+function Resolve-UvExe {
+    $cmd = Get-Command uv -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    foreach ($p in @("$env:USERPROFILE\.local\bin\uv.exe", "$env:LOCALAPPDATA\uv\bin\uv.exe")) {
+        if (Test-Path $p) { return $p }
+    }
+    return $null
+}
+$uvExe = Resolve-UvExe
 
 Write-Host ""
 Write-Host "  ============================================" -ForegroundColor Cyan
@@ -22,11 +32,15 @@ Write-Host ""
 
 # ── [1/3] uv 套件管理器 ──────────────────────────────────────
 Write-Host "  [1/3] 檢查 uv 套件管理器..." -NoNewline
-if (-not (Test-Path $uvExe)) {
+if (-not $uvExe) {
     Write-Host "  未安裝，自動下載中..." -ForegroundColor Yellow
-    Invoke-Expression (Invoke-WebRequest -UseBasicParsing "https://astral.sh/uv/install.ps1").Content
-    $env:PATH = "$env:LOCALAPPDATA\uv\bin;" + $env:PATH
-    if (-not (Test-Path $uvExe)) {
+    # PS 5.1 的 Invoke-WebRequest .Content 遇無 charset 回應會是 Byte[]，餵 iex 會炸；
+    # 改 Invoke-RestMethod（官方寫法）＋Byte[] 保險（新機實測教訓，同 pycharts launcher）
+    $uvScript = Invoke-RestMethod -UseBasicParsing "https://astral.sh/uv/install.ps1"
+    if ($uvScript -is [byte[]]) { $uvScript = [System.Text.Encoding]::UTF8.GetString($uvScript) }
+    Invoke-Expression $uvScript
+    $uvExe = Resolve-UvExe
+    if (-not $uvExe) {
         Write-Host "  安裝失敗，請手動安裝：https://astral.sh/uv" -ForegroundColor Red
         Read-Host "按 Enter 關閉"; exit 1
     }
