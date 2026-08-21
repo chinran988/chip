@@ -170,6 +170,26 @@ def job_collect_options() -> None:
         db.close()
 
 
+def job_backfill_options() -> None:
+    """選擇權隔日早上補採 — 10:05 CST。
+
+    TAIFEX 選擇權發布時間常晚於 17:05（實測 2026-08 連七日 17:05 job 撲空，
+    甚至隔天上午 11:00 OpenAPI 仍供前前日）。OpenAPI 僅供「最新」且各 collector
+    以資料自身 Date 欄歸日（自校），故本 job 只需再打一次、rows 自動落到正確日期，
+    冪等無污染。仿 10:00 上櫃融資補採（v0.13）的隔日早上模式。
+    """
+    db = SessionLocal()
+    try:
+        from app.collectors.taifex_options import TaifexOptionsCollector
+        target = _prev_trading_date(_today_cst()) or _today_cst()
+        results = TaifexOptionsCollector(db).collect(target)
+        logger.info("[job_backfill_options] target=%s results: %s", target, results)
+    except Exception as e:
+        logger.error("[job_backfill_options] error: %s", e, exc_info=True)
+    finally:
+        db.close()
+
+
 def job_collect_etf() -> None:
     """ETF 每日成分股採集（CHIP-ETF 模組，各投信 PCF 持股）。
 
@@ -413,6 +433,10 @@ def create_scheduler() -> BackgroundScheduler:
     # 上櫃融資補採 — 10:00 CST（TPEx OpenAPI 當晚不更新、隔天早上約 09:29 才放出，補前一交易日）
     scheduler.add_job(job_backfill_tpex_margin, CronTrigger(hour=10, minute=0, timezone="Asia/Taipei"),
                       id="backfill_tpex_margin", replace_existing=True)
+
+    # 選擇權隔日補採 — 10:05 CST（TAIFEX 發布常晚於 17:05；OpenAPI 自校歸日、冪等）
+    scheduler.add_job(job_backfill_options, CronTrigger(hour=10, minute=5, timezone="Asia/Taipei"),
+                      id="backfill_options", replace_existing=True)
 
     # Main daily collection — 16:35 CST (after TWSE closes + publishes)
     scheduler.add_job(job_daily_collect, CronTrigger(hour=16, minute=35, timezone="Asia/Taipei"),

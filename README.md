@@ -105,6 +105,14 @@ Admin 端點需 Header：`X-Admin-Key: <key>`
 
 ## Changelog
 
+### v0.15 — 2026-08-21 · 選擇權隔日早上補採排程
+- **新增 `job_backfill_options`**（`scheduler/jobs.py`，每日 10:05 CST）：
+  TAIFEX 選擇權發布時間常晚於 17:05（2026-08 實測連七日 17:05 job 撲空，
+  甚至隔日上午 OpenAPI 仍供前前日）。OpenAPI 僅供「最新」且各 collector 以資料
+  自身 Date 欄歸日（自校），本 job 每早再打一次、rows 自動落正確日期，冪等無污染。
+  仿 10:00 上櫃融資補採（v0.13）的隔日早上模式；17:05 場次保留（早發布時當日即收）。
+- 8/18、8/20 chain 以查詢頁回補（一般時段；盤後由 OpenAPI 發布後自動補齊）。
+
 ### v0.14 — 2026-08-13 · 選擇權小數履約價修正 + upsert 批內去重
 - **修正選擇權鏈 strike 解析**（`collectors/taifex_options.py`）：個股選擇權有小數履約價
   （17.5/18.5…，約 22 個契約），舊 `int()` 解析拋錯全塌成 0 → 同契約衝突鍵重複 →
